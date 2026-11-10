@@ -63,6 +63,9 @@ class CustomMinHeap<T> {
   /// Returns the minimum element without removing it in O(1) time.
   ///
   /// Returns `null` if the heap is empty.
+  ///
+  /// Note: When using nullable element types (`T?`), check [isEmpty] or [isNotEmpty]
+  /// to distinguish an empty heap from a stored `null` value.
   T? peek() {
     if (_elements.isEmpty) {
       return null;
@@ -76,6 +79,9 @@ class CustomMinHeap<T> {
   /// If the heap contains a single element, it is removed and returned in O(1).
   /// Otherwise, the last element replaces the root, and [_siftDown] restores
   /// the min-heap invariant.
+  ///
+  /// Note: When using nullable element types (`T?`), check [isEmpty] or [isNotEmpty]
+  /// to distinguish an empty heap from a stored `null` value.
   T? extractMin() {
     if (_elements.isEmpty) {
       return null;

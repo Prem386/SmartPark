@@ -369,6 +369,10 @@ void main() {
         () => ParkingSlotCandidate(slot: slotP01, distance: double.nan),
         throwsArgumentError,
       );
+      expect(
+        () => ParkingSlotCandidate(slot: slotP01, distance: double.infinity),
+        throwsArgumentError,
+      );
     });
 
     test('ranks candidates in ascending order of supplied route distance', () {

@@ -20,7 +20,7 @@ class ParkingSlotCandidate implements Comparable<ParkingSlotCandidate> {
     required this.slot,
     required this.distance,
   }) {
-    if (distance < 0 || distance.isNaN) {
+    if (distance < 0 || !distance.isFinite) {
       throw ArgumentError.value(
         distance,
         'distance',
