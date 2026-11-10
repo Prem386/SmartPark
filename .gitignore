@@ -1,0 +1,40 @@
+# Miscellaneous & OS
+.DS_Store
+Thumbs.db
+*.log
+*.buildlog
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Dart & Flutter
+.dart_tool/
+.pub-cache/
+.pub/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+**/build/
+**/doc/api/
+.widget_preview/
+
+# Android
+**/android/.gradle/
+**/android/local.properties
+**/android/key.properties
+**/android/**/*.keystore
+**/android/**/*.jks
+**/android/app/debug
+**/android/app/profile
+**/android/app/release
+
