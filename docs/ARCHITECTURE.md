@@ -283,4 +283,52 @@ SmartParkDsaService (Facade)
 > **Client-Side Optimistic Validation vs. Authoritative Settlement**:  
 > The client-side `BookingConflictService` and `CustomIntervalTree` provide zero-latency UI feedback, blocking invalid reservation attempts before network transmission. However, client memory is non-authoritative and transient. The authoritative single source of truth is the Spring Boot backend, which executes transactional database validation (`POST /api/bookings`) with locking to prevent double bookings across concurrent users.
 
+---
+
+## 8. Phase 3.0 — Frontend-Only Prototype Architecture
+
+### 8.1 Critical Architecture Decision: Frontend-Only Prototype
+SmartPark's initial prototype is explicitly implemented as a **frontend-only Flutter application**. Remote backend development, including Spring Boot REST APIs, database persistence layers (PostgreSQL / H2 / JPA), remote repositories, and authentication infrastructure, is deferred to a future version.
+
+All application logic, data modeling, conflict detection, routing, and recommendation algorithms execute in-memory inside the Flutter runtime on top of the four custom DSA implementations from Phase 2.
+
+### 8.2 Centralized Local Data Architecture (`SmartParkLocalData`)
+Local data is centralized in `frontend/lib/data/local/smartpark_local_data.dart`:
+- **Facility Layout**: Strictly conforms to `PARKING_FACILITY_DESIGN.md` (Revision 2.1.0).
+  - 1 West entrance gate (`NODE_ENTRANCE`).
+  - 10 Central driving aisle waypoints (`NODE_W01` through `NODE_W10`).
+  - Exactly 20 parking bays: Row A North (`P01`–`P10`, $Y = 13.5\text{ m}$) and Row B South (`P11`–`P20`, $Y = 2.5\text{ m}$).
+  - All vertices and 5.5m / 3.0m / 4.0m weighted edges are supplied directly by `ParkingGraphFactory.createFacilityGraph()`.
+- **Status Distribution**: Realistic baseline distribution across 20 bays:
+  - 12 Available: `P01`, `P03`, `P05`, `P06`, `P08`, `P09`, `P11`, `P12`, `P14`, `P16`, `P17`, `P19`.
+  - 4 Occupied: `P02`, `P07`, `P13`, `P18`.
+  - 2 Reserved: `P04`, `P15`.
+  - 2 Maintenance: `P10`, `P20` (`isActive = false`).
+- **Sample Bookings**: 4 representative bookings testing all model lifecycle statuses:
+  - `confirmed` (blocking): `B01` on `P04` [14:00 – 16:00).
+  - `active` (blocking): `B02` on `P15` [10:00 – 12:00).
+  - `completed` (non-blocking): `B03` on `P01` [08:00 – 09:30).
+  - `cancelled` (non-blocking): `B04` on `P03` [13:00 – 15:00).
+
+### 8.3 Centralized Application Initialization
+The application initialization sequence occurs at startup in `main.dart` / `SmartParkLocalData.initializeServices()`:
+1. `SmartParkLocalData.createInitialSlots()` supplies the 20 prototype bays.
+2. `ParkingSlotService` indexes slots into `CustomHashMap`.
+3. `SmartParkLocalData.createInitialBookings()` populates `BookingConflictService` backed by `CustomIntervalTree`.
+4. `ParkingNavigationService` builds the authoritative facility graph via `ParkingGraphFactory`.
+5. `ParkingRecommendationService` links to the slot and navigation service instances.
+6. `SmartParkDsaService` wraps all four services as an orchestrator facade.
+7. `SmartParkController` binds the facade into a single reactive state holder.
+
+### 8.4 Shared Service Architecture & State Management
+- **Lightweight State Management**: SmartPark uses Flutter's native `ChangeNotifier` (`SmartParkController`) and `InheritedNotifier` (`SmartParkScope`), adhering to minimal dependency and platform-first architectural principles. No external state libraries (Riverpod, Bloc, MobX) are required.
+- **Shared Singleton Controller**: `SmartParkScope` provides $O(1)$ subtree access via `SmartParkScope.of(context)`. All screens and widgets share the exact same underlying service instances, preventing split-brain state.
+- **In-Memory Volatility**: Mutating slots or adding bookings updates the shared application state during a running session. State resets cleanly to default hardcoded data upon application restart or via the user-facing reset action.
+
+### 8.5 UI-to-Service Interaction Rules
+1. UI components interact exclusively through `SmartParkScope` and `SmartParkController` / `SmartParkDsaService`.
+2. UI widgets never directly manipulate DSA structures or implement search/sorting algorithms.
+3. Dashboard availability metrics (Total, Available, Occupied, Reserved, Maintenance) are computed dynamically from `slotService.getAllSlots()`, never hardcoded into UI presentation code.
+
+
 
