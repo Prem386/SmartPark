@@ -110,5 +110,30 @@ class SmartParkDsaService {
   void bookSlot(Booking booking) {
     bookingService.addBooking(booking);
   }
+
+  /// Cancels an existing booking by [bookingId].
+  Booking cancelBooking(String bookingId) {
+    return bookingService.cancelBooking(bookingId);
+  }
+
+  /// Retrieves all bookings currently in the index.
+  List<Booking> getAllBookings() {
+    return bookingService.getAllBookings();
+  }
+
+  /// Retrieves all conflicting bookings on [slotId] for the window `[startTime, endTime)`.
+  List<Booking> getConflictingBookings(
+    String slotId,
+    DateTime startTime,
+    DateTime endTime, {
+    String? excludeBookingId,
+  }) {
+    return bookingService.getConflictingBookings(
+      slotId,
+      startTime,
+      endTime,
+      excludeBookingId: excludeBookingId,
+    );
+  }
 }
 

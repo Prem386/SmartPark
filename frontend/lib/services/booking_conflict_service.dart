@@ -183,6 +183,39 @@ class BookingConflictService {
     _tree.clear();
   }
 
+  /// Updates an existing booking in the index.
+  ///
+  /// Replaces the previous booking record while preserving AVL interval tree invariants.
+  /// Returns `true` if found and updated; `false` otherwise.
+  bool updateBooking(Booking updatedBooking) {
+    final existing = getBooking(updatedBooking.id);
+    if (existing == null) return false;
+    _tree.remove(updatedBooking.id);
+    return _tree.insert(updatedBooking);
+  }
+
+  /// Cancels a booking by [bookingId], marking its status as [BookingStatus.cancelled].
+  ///
+  /// Cancelled bookings remain in the index for historical display,
+  /// but no longer block future reservations.
+  /// Throws [ArgumentError] if the booking is not found.
+  /// Throws [StateError] if the booking is already cancelled or completed.
+  Booking cancelBooking(String bookingId) {
+    final existing = getBooking(bookingId);
+    if (existing == null) {
+      throw ArgumentError('Booking with id "$bookingId" not found.');
+    }
+    if (existing.status == BookingStatus.cancelled) {
+      throw StateError('Booking "$bookingId" is already cancelled.');
+    }
+    if (existing.status == BookingStatus.completed) {
+      throw StateError('Cannot cancel completed booking "$bookingId".');
+    }
+    final updated = existing.copyWith(status: BookingStatus.cancelled);
+    updateBooking(updated);
+    return updated;
+  }
+
   /// Rebuilds the conflict index from [bookings], discarding previous entries.
   void rebuildIndex(Iterable<Booking> bookings) {
     _tree.clear();

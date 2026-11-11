@@ -92,6 +92,45 @@ class SmartParkController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Returns all bookings currently indexed in the application state.
+  List<Booking> get allBookings => _dsaService.getAllBookings();
+
+  /// Cancels an existing booking, updates the reservation index, and notifies UI listeners.
+  Booking cancelBooking(String bookingId) {
+    final cancelled = _dsaService.cancelBooking(bookingId);
+
+    // If slot was reserved and has no remaining blocking bookings, restore to available
+    final slot = slotService.getSlot(cancelled.slotId);
+    if (slot != null && slot.status == SlotStatus.reserved) {
+      final hasOtherBlocking = bookingService.getAllBookings().any(
+            (b) =>
+                b.slotId == cancelled.slotId &&
+                BookingConflictService.isBlockingStatus(b.status),
+          );
+      if (!hasOtherBlocking) {
+        slotService.updateSlot(slot.copyWith(status: SlotStatus.available));
+      }
+    }
+
+    notifyListeners();
+    return cancelled;
+  }
+
+  /// Generates the next sequential booking identifier (e.g. 'B05').
+  String generateNextBookingId() {
+    int maxId = 0;
+    for (final booking in bookingService.getAllBookings()) {
+      final match = RegExp(r'^B(\d+)$').firstMatch(booking.id);
+      if (match != null) {
+        final val = int.tryParse(match.group(1)!);
+        if (val != null && val > maxId) {
+          maxId = val;
+        }
+      }
+    }
+    return 'B${(maxId + 1).toString().padLeft(2, '0')}';
+  }
+
   /// Resets in-memory application state back to clean hardcoded initial data.
   void resetToDefaults() {
     _dsaService = SmartParkLocalData.initializeServices();

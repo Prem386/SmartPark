@@ -361,7 +361,83 @@ The facility view faithfully renders the topology defined in `PARKING_FACILITY_D
 ### 9.5 Slot Inspection Details Modal
 - **Interaction**: Tapping an active bay opens `ParkingSlotDetailsSheet` via modal bottom sheet.
 - **Authoritative Data**: Displays slot code, status indicator, operational active state (`isActive`), coordinates ($X, Y\text{ m}$), navigation node ID (`navigationNodeId`), and an immediate availability banner (`isAvailable`).
-- **Phase Boundary**: Booking workflow is intentionally excluded and deferred to Phase 3.2.
+- **Phase Integration**: Direct "Reserve This Bay" shortcut for available slots routes directly to `CreateBookingScreen(initialSlotCode: slot.slotCode)`.
+
+---
+
+## 10. Phase 3.2 — Booking & Reservation Interface
+
+### 10.1 Feature Structure and Organization
+Phase 3.2 implements the booking and reservation domain located under `frontend/lib/features/bookings/`:
+```text
+frontend/lib/features/bookings/
+├── bookings_screen.dart             # Primary bookings list, status filtering, and live metric cards
+├── create_booking_screen.dart       # Interactive reservation form with real-time Interval Tree validation
+└── widgets/
+    ├── booking_card.dart            # Summary presentation card with status badge and inline cancellation
+    ├── booking_details_sheet.dart   # Bottom modal inspection sheet with complete booking metadata
+    ├── booking_status_badge.dart    # Standardized status chip (Confirmed, Active, Completed, Cancelled)
+    └── booking_time_selector.dart   # Date, start time, and end time picker interface
+```
+
+### 10.2 Booking Creation Workflow
+1. **Entry Points**: Users access the reservation interface via:
+   - Dashboard "Bookings & Reservations" quick action tile.
+   - Floating Action Button ("New Booking") on `BookingsScreen`.
+   - "Reserve This Bay" action on `ParkingSlotDetailsSheet` in the parking slots screen.
+2. **Parking Bay Selection**:
+   - Retrieved directly from `ParkingSlotService.getAllSlots()`. No redundant registry is introduced.
+   - Inactive bays (`isActive == false`) or bays under maintenance (`SlotStatus.maintenance`) cannot be reserved. The UI explicitly alerts the user with descriptive guidance.
+3. **Temporal Selection**:
+   - Date picker anchored to the facility reference date (`SmartParkLocalData.referenceDate`).
+   - Native Flutter `showTimePicker` for start and end times.
+   - Comprehensive validation ensures:
+     - No missing date, start time, or end time.
+     - End time must be strictly after start time ($t_{\text{end}} > t_{\text{start}}$).
+     - Start time cannot be in the past relative to current application time.
+4. **Real-Time Conflict Detection**:
+   - Triggered reactively as slot and time parameters change.
+   - Direct invocation of `controller.bookingService.getConflictingBookings(slotId, start, end)`.
+   - Visual feedback banners indicate either conflict presence (with conflicting booking ID and interval) or slot availability.
+5. **Confirmation & Idempotency**:
+   - Submission button is disabled if fields are incomplete, invalid, or conflicting.
+   - Protection against double-taps via internal submitting flag.
+   - Final validation re-checks the Interval Tree immediately prior to insertion.
+   - Generates sequential booking reference (`B01`–`B04` followed by `B05`, `B06`, etc.).
+   - Dispatches `controller.bookSlot(newBooking)`, updating the Interval Tree and transitioning available slots to `SlotStatus.reserved`.
+
+### 10.3 Controller and Service Responsibilities
+- **`BookingConflictService` (Custom Interval Tree Integration)**:
+  - Backed by `CustomIntervalTree` (AVL-augmented search tree ordered by start time with subtree `maxEnd`).
+  - Implements $O(\log n)$ temporal conflict validation, insertion (`addBooking`), update (`updateBooking`), and cancellation (`cancelBooking`).
+  - Enforces status filtering so non-blocking statuses (`cancelled`, `completed`) do not impede prospective bookings.
+- **`SmartParkDsaService` (Facade)**:
+  - Exposes unified operations (`bookSlot`, `cancelBooking`, `getAllBookings`, `getConflictingBookings`) to presentation controllers.
+- **`SmartParkController` (ChangeNotifier)**:
+  - Reactive central controller holding application state.
+  - Exposes `allBookings`, `bookSlot`, `cancelBooking`, and `generateNextBookingId`.
+  - Coordinates slot state transition (`SlotStatus.available` $\leftrightarrow$ `SlotStatus.reserved`) and emits `notifyListeners()` to update dependent views.
+
+### 10.4 Custom Interval Tree Integration & Interval Semantics
+- **Half-Open Intervals**: Reservations follow the standard mathematical convention $[t_{\text{start}}, t_{\text{end}})$, where start time is inclusive and end time is exclusive.
+  - Two intervals $[s_1, e_1)$ and $[s_2, e_2)$ conflict if and only if $s_1 < e_2 \land s_2 < e_1$.
+  - Contiguous / adjacent intervals (e.g. 10:00–11:00 and 11:00–12:00) share an endpoint and do **NOT** overlap.
+  - Distinct parking bays never conflict regardless of identical time intervals.
+- **Lifecycle Status Rules**:
+  - `confirmed` and `active` are blocking statuses that occupy physical bays.
+  - `completed` and `cancelled` are non-blocking statuses that release physical bays.
+
+### 10.5 Booking Cancellation Architecture
+- Eligible bookings (`confirmed` and `active`) can be cancelled via `controller.cancelBooking(bookingId)`.
+- Already completed or cancelled bookings cannot be re-cancelled.
+- In-memory preservation: Cancelled bookings are updated in place within the Interval Tree, preserving historical records for presentation while removing blocking overlap constraints.
+- If the cancelled reservation's slot has no remaining blocking bookings, the slot automatically returns to `SlotStatus.available` and dependent widgets refresh reactively.
+
+### 10.6 Dashboard & Facility View Integration
+- **Dashboard Quick Action**: The "Bookings & Reservations" tile navigates directly to `BookingsScreen` while preserving controller state.
+- **Dynamic Metrics**: Dashboard availability summary counters update dynamically whenever bookings change slot status.
+- **In-Memory Volatility**: All changes exist in client runtime memory; triggering "Reset Data to Defaults" restores initial baseline slots and sample bookings.
+
 
 
 

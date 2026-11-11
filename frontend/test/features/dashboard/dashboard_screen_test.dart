@@ -93,7 +93,7 @@ void main() {
       expect(find.text('SmartPark Dashboard'), findsOneWidget);
     });
 
-    testWidgets('unimplemented quick action tiles trigger expected snackbars',
+    testWidgets('bookings quick action navigates to BookingsScreen and back',
         (WidgetTester tester) async {
       final controller = SmartParkController();
       await tester.pumpWidget(buildTestableDashboard(controller));
@@ -101,14 +101,24 @@ void main() {
       // Scroll to and tap Bookings & Reservations
       await tester.ensureVisible(find.text('Bookings & Reservations'));
       await tester.tap(find.text('Bookings & Reservations'));
-      await tester.pump();
-      expect(find.text('Booking management available in Phase 3.2.'), findsOneWidget);
+      await tester.pumpAndSettle();
 
-      // Dismiss current SnackBar before next interaction
-      tester.binding.scheduleFrame();
-      ScaffoldMessenger.of(tester.element(find.text('Bookings & Reservations')))
-          .hideCurrentSnackBar();
-      await tester.pump();
+      // Verify BookingsScreen is displayed
+      expect(find.text('SmartPark Reservations'), findsOneWidget);
+      expect(find.text('In-memory temporal conflict detection backed by custom AVL Interval Tree'), findsOneWidget);
+
+      // Tap back button
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+
+      // Verify returned to Dashboard
+      expect(find.text('SmartPark Dashboard'), findsOneWidget);
+    });
+
+    testWidgets('unimplemented quick action tiles trigger expected snackbars',
+        (WidgetTester tester) async {
+      final controller = SmartParkController();
+      await tester.pumpWidget(buildTestableDashboard(controller));
 
       // Scroll to and tap Facility Navigation
       await tester.ensureVisible(find.text('Facility Navigation'));

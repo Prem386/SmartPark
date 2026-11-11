@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../models/parking_slot.dart';
+import '../../bookings/create_booking_screen.dart';
 import 'parking_status_legend.dart';
 
 /// Bottom modal sheet presenting the inspected parking slot's details.
@@ -160,6 +161,28 @@ class ParkingSlotDetailsSheet extends StatelessWidget {
               slot.navigationNodeId ?? 'N/A',
             ),
             const SizedBox(height: 20),
+
+            // Reserve Bay Action (if available)
+            if (slot.isAvailable) ...[
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => CreateBookingScreen(
+                          initialSlotCode: slot.slotCode,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.bookmark_add_outlined),
+                  label: const Text('Reserve This Bay'),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
 
             // Dismiss Button
             SizedBox(

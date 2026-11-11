@@ -278,6 +278,30 @@ void main() {
       );
     });
 
+    test('updateBooking replaces existing booking in interval tree', () {
+      final b1 = createBooking(id: 'B1', slotId: 'P01', startHour: 10, endHour: 12);
+      service.addBooking(b1);
+
+      final updated = b1.copyWith(status: BookingStatus.cancelled);
+      final success = service.updateBooking(updated);
+
+      expect(success, isTrue);
+      expect(service.getBooking('B1')?.status, equals(BookingStatus.cancelled));
+      // Cancelled booking no longer conflicts
+      expect(service.hasConflict('P01', DateTime(2026, 11, 15, 10, 0), DateTime(2026, 11, 15, 12, 0)), isFalse);
+    });
+
+    test('cancelBooking marks booking as cancelled and unblocks slot window', () {
+      final b1 = createBooking(id: 'B1', slotId: 'P01', startHour: 10, endHour: 12);
+      service.addBooking(b1);
+      expect(service.hasConflict('P01', DateTime(2026, 11, 15, 10, 0), DateTime(2026, 11, 15, 12, 0)), isTrue);
+
+      final cancelled = service.cancelBooking('B1');
+      expect(cancelled.status, equals(BookingStatus.cancelled));
+      expect(service.getBooking('B1')?.status, equals(BookingStatus.cancelled));
+      expect(service.hasConflict('P01', DateTime(2026, 11, 15, 10, 0), DateTime(2026, 11, 15, 12, 0)), isFalse);
+    });
+
     test('validates inputs and throws ArgumentError on invalid parameters', () {
       expect(
         () => service.hasConflict('', baseTime, baseTime.add(const Duration(hours: 1))),

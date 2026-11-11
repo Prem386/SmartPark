@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../widgets/smartpark_scope.dart';
+import '../bookings/bookings_screen.dart';
 import '../parking/parking_slots_screen.dart';
 
 /// Primary dashboard shell for SmartPark.
@@ -230,9 +231,9 @@ class DashboardScreen extends StatelessWidget {
           title: 'Bookings & Reservations',
           subtitle: 'Check reservation intervals and conflict validation',
           onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Booking management available in Phase 3.2.'),
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const BookingsScreen(),
               ),
             );
           },
