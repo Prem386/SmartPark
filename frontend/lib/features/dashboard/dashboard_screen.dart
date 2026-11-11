@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../dsa/min_heap/parking_slot_candidate.dart';
+import '../../services/smartpark_controller.dart';
 import '../../widgets/smartpark_scope.dart';
 import '../bookings/bookings_screen.dart';
 import '../navigation/facility_navigation_screen.dart';
@@ -114,7 +116,7 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMetricsGrid(BuildContext context, dynamic controller) {
+  Widget _buildMetricsGrid(BuildContext context, SmartParkController controller) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final crossAxisCount = constraints.maxWidth > 700 ? 5 : 2;
@@ -162,7 +164,7 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildRecommendationHighlight(BuildContext context, dynamic candidate) {
+  Widget _buildRecommendationHighlight(BuildContext context, ParkingSlotCandidate candidate) {
     return Card(
       color: const Color(0xFFEFF6FF),
       shape: RoundedRectangleBorder(

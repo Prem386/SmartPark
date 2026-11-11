@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:smartpark_app/data/local/smartpark_local_data.dart';
 import 'package:smartpark_app/features/bookings/create_booking_screen.dart';
+import 'package:smartpark_app/features/bookings/widgets/booking_time_selector.dart';
 import 'package:smartpark_app/models/booking.dart';
 import 'package:smartpark_app/models/parking_slot.dart';
 import 'package:smartpark_app/services/smartpark_controller.dart';
@@ -11,6 +13,7 @@ void main() {
   Widget buildTestableScreen(
     SmartParkController controller, {
     String? initialSlotCode,
+    DateTime? initialDate,
     DateTime Function()? currentTimeProvider,
   }) {
     return SmartParkScope(
@@ -18,6 +21,7 @@ void main() {
       child: MaterialApp(
         home: CreateBookingScreen(
           initialSlotCode: initialSlotCode,
+          initialDate: initialDate,
           currentTimeProvider: currentTimeProvider ?? () => DateTime(2026, 11, 11, 8, 0),
         ),
       ),
@@ -262,6 +266,139 @@ void main() {
       expect(controller.slotService.getSlot('P01')?.status, equals(SlotStatus.reserved));
       expect(controller.availableSlots, equals(11));
       expect(controller.reservedSlots, equals(3));
+    });
+  });
+
+  group('CreateBookingScreen - Date & Time Boundaries and Validations', () {
+    test('calculateDateRange correctly includes current time, reference date, and buffer years', () {
+      // 1. Host clock earlier than reference date (e.g. 2025)
+      final earlyRange = BookingTimeSelector.calculateDateRange(
+        DateTime(2025, 3, 15),
+        DateTime(2026, 11, 11),
+      );
+      expect(earlyRange.firstDate, equals(DateTime(2024, 1, 1)));
+      expect(earlyRange.lastDate, equals(DateTime(2027, 12, 31)));
+      expect(DateTime(2026, 11, 11).isAfter(earlyRange.firstDate), isTrue);
+      expect(DateTime(2026, 11, 11).isBefore(earlyRange.lastDate), isTrue);
+
+      // 2. Host clock equal to reference date year (2026)
+      final sameYearRange = BookingTimeSelector.calculateDateRange(
+        DateTime(2026, 11, 11),
+        DateTime(2026, 11, 11),
+      );
+      expect(sameYearRange.firstDate, equals(DateTime(2025, 1, 1)));
+      expect(sameYearRange.lastDate, equals(DateTime(2027, 12, 31)));
+
+      // 3. Host clock later than reference date (e.g. 2027)
+      final lateRange = BookingTimeSelector.calculateDateRange(
+        DateTime(2027, 5, 20),
+        DateTime(2026, 11, 11),
+      );
+      expect(lateRange.firstDate, equals(DateTime(2025, 1, 1)));
+      expect(lateRange.lastDate, equals(DateTime(2028, 12, 31)));
+      expect(DateTime(2027, 5, 20).isBefore(lateRange.lastDate), isTrue);
+    });
+
+    testWidgets('allows booking a valid future time on current non-reference date',
+        (WidgetTester tester) async {
+      final controller = SmartParkController();
+      final targetDate = DateTime(2027, 6, 15);
+
+      await tester.pumpWidget(
+        buildTestableScreen(
+          controller,
+          initialSlotCode: 'P01',
+          initialDate: targetDate,
+          currentTimeProvider: () => DateTime(2027, 6, 15, 10, 0),
+        ),
+      );
+
+      // Select Start Time: default is 10:00 (not in past relative to 10:00)
+      await tester.tap(find.text('Start Time'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+
+      // Select End Time: default is 11:00
+      await tester.tap(find.text('End Time'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Booking start time cannot be in the past.'), findsNothing);
+      expect(find.text('This slot is available for the selected time (1h).'), findsOneWidget);
+
+      final confirmBtn = tester.widget<ElevatedButton>(
+        find.widgetWithText(ElevatedButton, 'Confirm Booking'),
+      );
+      expect(confirmBtn.onPressed, isNotNull);
+    });
+
+    testWidgets('rejects past time on current non-reference date',
+        (WidgetTester tester) async {
+      final controller = SmartParkController();
+      final targetDate = DateTime(2027, 6, 15);
+
+      await tester.pumpWidget(
+        buildTestableScreen(
+          controller,
+          initialSlotCode: 'P01',
+          initialDate: targetDate,
+          currentTimeProvider: () => DateTime(2027, 6, 15, 16, 0),
+        ),
+      );
+
+      // Default start time picker yields 10:00, which is in the past relative to 16:00
+      await tester.tap(find.text('Start Time'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('End Time'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Booking start time cannot be in the past.'), findsOneWidget);
+
+      final confirmBtn = tester.widget<ElevatedButton>(
+        find.widgetWithText(ElevatedButton, 'Confirm Booking'),
+      );
+      expect(confirmBtn.onPressed, isNull);
+    });
+
+    testWidgets('selecting reference date preserves sample conflict detection and allows future booking',
+        (WidgetTester tester) async {
+      final controller = SmartParkController();
+      // On reference date, P04 has B01 (14:00 - 16:00)
+      await tester.pumpWidget(
+        buildTestableScreen(
+          controller,
+          initialSlotCode: 'P04',
+          initialDate: SmartParkLocalData.referenceDate,
+          currentTimeProvider: () => DateTime(2026, 11, 11, 8, 0),
+        ),
+      );
+
+      // Verify date displayed
+      expect(find.text('Nov 11, 2026'), findsOneWidget);
+
+      // Select start time 10:00, end time 11:00 (future relative to 08:00, no conflict on P04)
+      await tester.tap(find.text('Start Time'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('End Time'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('This slot is available for the selected time (1h).'), findsOneWidget);
+      final confirmBtn = tester.widget<ElevatedButton>(
+        find.widgetWithText(ElevatedButton, 'Confirm Booking'),
+      );
+      expect(confirmBtn.onPressed, isNotNull);
     });
   });
 }

@@ -16,12 +16,16 @@ class CreateBookingScreen extends StatefulWidget {
   /// Optional slot code pre-selected from facility inspection.
   final String? initialSlotCode;
 
+  /// Optional initial reservation date (defaults to [SmartParkLocalData.referenceDate]).
+  final DateTime? initialDate;
+
   /// Optional time provider for deterministic testing of past-time validation.
   final DateTime Function()? currentTimeProvider;
 
   const CreateBookingScreen({
     super.key,
     this.initialSlotCode,
+    this.initialDate,
     this.currentTimeProvider,
   });
 
@@ -45,8 +49,8 @@ class _CreateBookingScreenState extends State<CreateBookingScreen> {
   void initState() {
     super.initState();
     _selectedSlotCode = widget.initialSlotCode;
-    // Anchor to reference date from local data
-    _selectedDate = SmartParkLocalData.referenceDate;
+    // Anchor to initial date or facility demonstration reference date
+    _selectedDate = widget.initialDate ?? SmartParkLocalData.referenceDate;
   }
 
   @override
@@ -56,9 +60,29 @@ class _CreateBookingScreenState extends State<CreateBookingScreen> {
     super.dispose();
   }
 
-  DateTime _now() => widget.currentTimeProvider != null
-      ? widget.currentTimeProvider!()
-      : DateTime.now();
+  DateTime _now() {
+    if (widget.currentTimeProvider != null) {
+      return widget.currentTimeProvider!();
+    }
+    final systemNow = DateTime.now();
+    // When the selected date is on the facility demonstration reference date,
+    // anchor the baseline comparison to 08:00 on the reference date so that
+    // demonstration sample bookings and conflict detection remain functional
+    // regardless of host device system clock.
+    if (_selectedDate != null &&
+        _selectedDate!.year == SmartParkLocalData.referenceDate.year &&
+        _selectedDate!.month == SmartParkLocalData.referenceDate.month &&
+        _selectedDate!.day == SmartParkLocalData.referenceDate.day) {
+      return DateTime(
+        SmartParkLocalData.referenceDate.year,
+        SmartParkLocalData.referenceDate.month,
+        SmartParkLocalData.referenceDate.day,
+        8,
+        0,
+      );
+    }
+    return systemNow;
+  }
 
   DateTime? get _startDateTime {
     if (_selectedDate == null || _startTime == null) return null;
@@ -326,6 +350,7 @@ class _CreateBookingScreenState extends State<CreateBookingScreen> {
                   selectedDate: _selectedDate,
                   startTime: _startTime,
                   endTime: _endTime,
+                  currentTimeProvider: widget.currentTimeProvider,
                   onDateChanged: (d) => setState(() => _selectedDate = d),
                   onStartTimeChanged: (t) => setState(() => _startTime = t),
                   onEndTimeChanged: (t) => setState(() => _endTime = t),

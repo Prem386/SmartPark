@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../data/local/smartpark_local_data.dart';
 
 /// Reusable widget for selecting booking date, start time, and end time.
 ///
@@ -12,6 +13,7 @@ class BookingTimeSelector extends StatelessWidget {
   final ValueChanged<DateTime> onDateChanged;
   final ValueChanged<TimeOfDay> onStartTimeChanged;
   final ValueChanged<TimeOfDay> onEndTimeChanged;
+  final DateTime Function()? currentTimeProvider;
 
   const BookingTimeSelector({
     super.key,
@@ -21,6 +23,7 @@ class BookingTimeSelector extends StatelessWidget {
     required this.onDateChanged,
     required this.onStartTimeChanged,
     required this.onEndTimeChanged,
+    this.currentTimeProvider,
   });
 
   String _formatDate(DateTime? dt) {
@@ -39,17 +42,39 @@ class BookingTimeSelector extends StatelessWidget {
     return '$hour:$minute';
   }
 
+  /// Computes the valid date picker boundaries given current time and demonstration reference date.
+  ///
+  /// Guarantees that both [currentTime] and [referenceDate] are strictly contained within
+  /// `[firstDate, lastDate]`, regardless of whether the host device clock is in 2024, 2025, 2026, or 2027+.
+  static ({DateTime firstDate, DateTime lastDate}) calculateDateRange(
+    DateTime currentTime,
+    DateTime referenceDate,
+  ) {
+    final earliest = currentTime.isBefore(referenceDate) ? currentTime : referenceDate;
+    final latest = currentTime.isAfter(referenceDate) ? currentTime : referenceDate;
+    return (
+      firstDate: DateTime(earliest.year - 1, 1, 1),
+      lastDate: DateTime(latest.year + 1, 12, 31),
+    );
+  }
+
   Future<void> _pickDate(BuildContext context) async {
-    final now = DateTime.now();
-    final initial = selectedDate ?? now;
-    final first = now.subtract(const Duration(days: 30));
-    final last = now.add(const Duration(days: 365));
+    final now = currentTimeProvider != null
+        ? currentTimeProvider!()
+        : DateTime.now();
+    final ref = SmartParkLocalData.referenceDate;
+    final range = calculateDateRange(now, ref);
+
+    final initial = selectedDate ?? ref;
+    final initialDate = initial.isBefore(range.firstDate)
+        ? range.firstDate
+        : (initial.isAfter(range.lastDate) ? range.lastDate : initial);
 
     final picked = await showDatePicker(
       context: context,
-      initialDate: initial.isBefore(first) ? first : (initial.isAfter(last) ? last : initial),
-      firstDate: first,
-      lastDate: last,
+      initialDate: initialDate,
+      firstDate: range.firstDate,
+      lastDate: range.lastDate,
     );
     if (picked != null) {
       onDateChanged(picked);
