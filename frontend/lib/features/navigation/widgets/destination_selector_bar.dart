@@ -47,19 +47,24 @@ class DestinationSelectorBar extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: const [
-                    Icon(Icons.directions_car, size: 16, color: AppTheme.primaryBlue),
-                    SizedBox(width: 6),
-                    Text(
-                      'Select Destination Bay',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primaryDark,
+                Expanded(
+                  child: Row(
+                    children: const [
+                      Icon(Icons.directions_car, size: 16, color: AppTheme.primaryBlue),
+                      SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          'Select Destination Bay',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primaryDark,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 if (selectedSlotCode != null)
                   TextButton.icon(
@@ -109,11 +114,15 @@ class DestinationSelectorBar extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        '(${slot.row.displayName} • ${slot.status.displayName})',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
+                      Flexible(
+                        child: Text(
+                          '(${slot.row.displayName} • ${slot.status.displayName})',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
                         ),
                       ),
                     ],

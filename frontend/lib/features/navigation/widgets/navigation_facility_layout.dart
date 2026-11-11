@@ -72,7 +72,11 @@ class NavigationFacilityLayout extends StatelessWidget {
                     // Layer 1: Vector rendering of the 30 connections and Dijkstra shortest route
                     Positioned.fill(
                       child: CustomPaint(
-                        painter: FacilityRoutePainter(route: activeRoute),
+                        painter: FacilityRoutePainter(
+                          route: activeRoute,
+                          rowASlots: rowASlots,
+                          rowBSlots: rowBSlots,
+                        ),
                       ),
                     ),
 
@@ -194,7 +198,6 @@ class NavigationFacilityLayout extends StatelessWidget {
     required IconData icon,
   }) {
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, size: 13, color: AppTheme.primaryBlue),
         const SizedBox(width: 4),
@@ -208,11 +211,14 @@ class NavigationFacilityLayout extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 6),
-        Text(
-          subtitle,
-          style: TextStyle(
-            fontSize: 10,
-            color: Colors.grey.shade600,
+        Expanded(
+          child: Text(
+            subtitle,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 10,
+              color: Colors.grey.shade600,
+            ),
           ),
         ),
       ],

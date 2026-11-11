@@ -167,13 +167,17 @@ class _BookingsScreenState extends State<BookingsScreen> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final crossAxisCount = constraints.maxWidth > 650 ? 5 : 3;
+        const targetHeight = 58.0;
+        final itemWidth =
+            (constraints.maxWidth - (crossAxisCount - 1) * 8) / crossAxisCount;
+        final childAspectRatio = itemWidth / targetHeight;
         return GridView.count(
           crossAxisCount: crossAxisCount,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           mainAxisSpacing: 8,
           crossAxisSpacing: 8,
-          childAspectRatio: constraints.maxWidth > 650 ? 2.2 : 1.9,
+          childAspectRatio: childAspectRatio,
           children: [
             _MiniMetricCard(
               label: 'Total',
@@ -332,6 +336,7 @@ class _MiniMetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: 0,
+      margin: EdgeInsets.zero,
       color: Colors.white,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
@@ -340,12 +345,14 @@ class _MiniMetricCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Icon(icon, size: 18, color: color),
             const SizedBox(width: 6),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
@@ -360,6 +367,8 @@ class _MiniMetricCard extends StatelessWidget {
                   ),
                   Text(
                     value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.bold,

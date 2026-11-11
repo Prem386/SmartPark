@@ -99,12 +99,16 @@ class ParkingFilterBar extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Showing $matchingCount of $totalCount bays',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade700,
+            Flexible(
+              child: Text(
+                'Showing $matchingCount of $totalCount bays',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade700,
+                ),
               ),
             ),
             if (selectedStatus != null || searchController.text.isNotEmpty)

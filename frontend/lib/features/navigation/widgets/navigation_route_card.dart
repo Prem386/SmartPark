@@ -146,7 +146,7 @@ class NavigationRouteCard extends StatelessWidget {
 
   Widget _buildMetricsRow(BuildContext context, NavigationRoute route) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       decoration: BoxDecoration(
         color: const Color(0xFFF8FAFC),
         borderRadius: BorderRadius.circular(10),
@@ -155,25 +155,31 @@ class NavigationRouteCard extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildMetricItem(
-            label: 'Total Distance',
-            value: '${route.distance.toStringAsFixed(1)}m',
-            icon: Icons.straighten,
-            color: AppTheme.primaryBlue,
+          Expanded(
+            child: _buildMetricItem(
+              label: 'Total Distance',
+              value: '${route.distance.toStringAsFixed(1)}m',
+              icon: Icons.straighten,
+              color: AppTheme.primaryBlue,
+            ),
           ),
           Container(width: 1, height: 36, color: const Color(0xFFE2E8F0)),
-          _buildMetricItem(
-            label: 'Total Hops',
-            value: '${route.path.length > 1 ? route.path.length - 1 : 0} links',
-            icon: Icons.timeline,
-            color: const Color(0xFF0284C7),
+          Expanded(
+            child: _buildMetricItem(
+              label: 'Total Hops',
+              value: '${route.path.length > 1 ? route.path.length - 1 : 0} links',
+              icon: Icons.timeline,
+              color: const Color(0xFF0284C7),
+            ),
           ),
           Container(width: 1, height: 36, color: const Color(0xFFE2E8F0)),
-          _buildMetricItem(
-            label: 'Origin Gate',
-            value: 'Entrance (2.0m)',
-            icon: Icons.login,
-            color: const Color(0xFF059669),
+          Expanded(
+            child: _buildMetricItem(
+              label: 'Origin Gate',
+              value: 'Entrance (2.0m)',
+              icon: Icons.login,
+              color: const Color(0xFF059669),
+            ),
           ),
         ],
       ),
@@ -187,29 +193,38 @@ class NavigationRouteCard extends StatelessWidget {
     required Color color,
   }) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 14, color: color),
             const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey.shade600,
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey.shade600,
+                ),
               ),
             ),
           ],
         ),
         const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: AppTheme.primaryDark,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.primaryDark,
+            ),
           ),
         ),
       ],
@@ -339,12 +354,15 @@ class NavigationRouteCard extends StatelessWidget {
           ),
           const SizedBox(width: 14),
           if (segmentWeight != null)
-            Text(
-              '↓ Traversing segment: ${segmentWeight.toStringAsFixed(1)}m',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey.shade600,
+            Expanded(
+              child: Text(
+                '↓ Traversing segment: ${segmentWeight.toStringAsFixed(1)}m',
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey.shade600,
+                ),
               ),
             ),
         ],

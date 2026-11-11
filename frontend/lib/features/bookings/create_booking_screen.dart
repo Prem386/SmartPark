@@ -479,6 +479,7 @@ class _CreateBookingScreenState extends State<CreateBookingScreen> {
   ) {
     return DropdownButtonFormField<String>(
       initialValue: _selectedSlotCode,
+      isExpanded: true,
       decoration: const InputDecoration(
         labelText: 'Parking Bay',
         prefixIcon: Icon(Icons.local_parking),
@@ -500,14 +501,17 @@ class _CreateBookingScreenState extends State<CreateBookingScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                '${s.slotCode} (${s.row.displayName})',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: isMaintenance ? Colors.grey : AppTheme.primaryDark,
+              Flexible(
+                child: Text(
+                  '${s.slotCode} (${s.row.displayName})',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: isMaintenance ? Colors.grey : AppTheme.primaryDark,
+                  ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Text(
                 statusDesc,
                 style: TextStyle(

@@ -50,14 +50,19 @@ class _FacilityNavigationScreenState extends State<FacilityNavigationScreen> {
     }
   }
 
-  void _calculateRoute(String? slotCode, ParkingNavigationService navService) {
+  void _calculateRoute(String? slotCode, ParkingNavigationService navService, [ParkingSlot? slot]) {
     if (slotCode == null || slotCode.trim().isEmpty) {
       _clearRoute();
       return;
     }
 
     final cleanCode = slotCode.trim().toUpperCase();
-    final route = navService.getRouteToSlotCode(cleanCode);
+    final targetSlot = slot ??
+        SmartParkScope.of(context).slotService.getSlot(cleanCode);
+
+    final route = targetSlot != null
+        ? navService.getRouteToSlot(targetSlot)
+        : navService.getRouteToSlotCode(cleanCode);
 
     setState(() {
       _selectedSlotCode = cleanCode;

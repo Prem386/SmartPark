@@ -118,23 +118,42 @@ class BookingTimeSelector extends StatelessWidget {
             borderRadius: BorderRadius.circular(10),
             side: const BorderSide(color: Color(0xFFE2E8F0)),
           ),
-          child: ListTile(
-            leading: const Icon(Icons.calendar_month, color: AppTheme.primaryBlue),
-            title: const Text(
-              'Reservation Date',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            subtitle: Text(
-              _formatDate(selectedDate),
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.primaryDark,
-              ),
-            ),
-            trailing: OutlinedButton(
-              onPressed: () => _pickDate(context),
-              child: const Text('Change Date'),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              children: [
+                const Icon(Icons.calendar_month, color: AppTheme.primaryBlue),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Reservation Date',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      Text(
+                        _formatDate(selectedDate),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primaryDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: () => _pickDate(context),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  child: const Text('Change Date'),
+                ),
+              ],
             ),
           ),
         ),
@@ -192,27 +211,34 @@ class _TimeCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  Icon(icon, size: 16, color: AppTheme.primaryBlue),
+                  Icon(icon, size: 15, color: AppTheme.primaryBlue),
                   const SizedBox(width: 4),
-                  Text(
-                    label,
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                  Expanded(
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 6),
-              Text(
-                timeText,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.primaryDark,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  timeText,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.primaryDark,
+                  ),
                 ),
               ),
               const SizedBox(height: 2),

@@ -113,11 +113,14 @@ class ParkingFacilityLayout extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Text(
-            subtitle,
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey.shade600,
+          Expanded(
+            child: Text(
+              subtitle,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey.shade600,
+              ),
             ),
           ),
         ],
