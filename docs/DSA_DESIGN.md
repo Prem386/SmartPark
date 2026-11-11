@@ -224,81 +224,121 @@ An Augmented Binary Search Tree where each node represents a booking interval:
 
 ---
 
-## 5. Algorithm 4: Graph + Dijkstra (Shortest-Path Navigation)
+## 5. Algorithm 4: Weighted Graph + Dijkstra (Shortest-Path Navigation)
 
 ### 5.1 Purpose
-Models the spatial layout of the parking facility as a directed/undirected weighted graph. Uses Dijkstra's algorithm to compute the shortest walking or driving path from an entrance node or current user position to an assigned parking bay node, providing turn-by-turn coordinate navigation.
+Models the spatial layout of the parking facility as an undirected/directed weighted graph. Uses Dijkstra's algorithm to compute the shortest driving and walking paths from an entrance node or current user position to an assigned parking bay node, providing turn-by-turn coordinate navigation and route distances for recommendation ranking.
 
 ### 5.2 Data Representation
-An **Adjacency List** representation:
-- **`NavigationNode`**:
-  - `final String id`: Unique node identifier (e.g., `"ENTRANCE_NORTH"`, `"AISLE_B2"`, `"SLOT_B204"`).
-  - `final String label`: Human-readable label.
-  - `final double x`: Normalized horizontal coordinate on floor plan map.
-  - `final double y`: Normalized vertical coordinate on floor plan map.
-  - `final int floor`: Floor level (e.g., 1, 2, -1).
-  - `final String nodeType`: Enum or string (`entrance`, `aisle`, `slot`, `elevator`, `exit`).
-- **`NavigationEdge`**:
-  - `final String sourceNodeId`: Starting node.
-  - `final String targetNodeId`: Destination node.
-  - `final double weight`: Non-negative distance or travel cost (meters/seconds).
-  - `final bool isBidirectional`: If true, traversal is allowed in both directions.
-- **`NavigationGraph`**:
-  - `Map<String, NavigationNode> _nodes`: Node lookup table.
-  - `Map<String, List<NavigationEdge>> _adjacencyList`: Edges originating from each node.
+An **Adjacency List** representation implemented from first principles:
+- **`GraphNodeType` (Enum)**:
+  - `entrance`: Facility vehicle/pedestrian access point.
+  - `aisleWaypoint`: Central aisle decision and transit point.
+  - `parkingSlot`: Physical parking bay destination.
+- **`GraphNode`**:
+  - `final String id`: Canonical vertex identifier (e.g., `'NODE_ENTRANCE'`, `'NODE_W01'`, `'NODE_P01'`).
+  - `final GraphNodeType type`: Semantic role of the node.
+  - `final String label`: Human-readable label (e.g., `'Main Entrance'`, `'Aisle Waypoint 1'`).
+  - `final double? x`: Physical X coordinate in meters from West boundary.
+  - `final double? y`: Physical Y coordinate in meters from South boundary.
+  - `final int floor`: Facility floor level (defaults to 1).
+- **`GraphEdge`**:
+  - `final String sourceNodeId`: Origin vertex ID.
+  - `final String targetNodeId`: Destination vertex ID (`destinationNodeId` alias).
+  - `final double weight`: Physical travel distance in meters (invariant: non-negative and finite).
+- **`WeightedGraph`**:
+  - `final CustomHashMap<String, GraphNode> _vertices`: Vertex lookup table backed by Phase 2.3 `CustomHashMap`.
+  - `final CustomHashMap<String, List<GraphEdge>> _adjacency`: Adjacency list storing outgoing edges for each vertex.
+  - Tracks `vertexCount`, `edgeCount` (undirected), `undirectedEdgeCount`, and `directedEdgeCount`.
+- **`DijkstraQueueEntry`**:
+  - `final String vertexId`: Identifier of vertex awaiting settlement.
+  - `final double tentativeDistance`: Current shortest tentative path distance from source.
+  - Implements `Comparable<DijkstraQueueEntry>` to prioritize minimum tentative distance; ties broken deterministically by `vertexId`.
+- **`DijkstraResult`**:
+  - Immutable result capturing `source`, `destination`, `distance`, `path`, `hasPath`, `allDistances`, and `predecessors`.
+  - Defensive unmodifiable views; returns `distance = null`, `hasPath = false`, and `path = []` for unreachable nodes.
 
 ### 5.3 Main Operations
-- `void addNode(NavigationNode node)`: Registers node in graph.
-- `void addEdge(NavigationEdge edge)`:
-  - Appends edge to `_adjacencyList[edge.sourceNodeId]`.
-  - If `edge.isBidirectional`, appends reverse edge to `_adjacencyList[edge.targetNodeId]`.
-- `NavigationPath? findShortestPath(String startNodeId, String targetNodeId)`:
-  1. Validates presence of `startNodeId` and `targetNodeId`.
-  2. Initializes:
-     - `Map<String, double> distances`: All set to $\infty$, `distances[startNodeId] = 0.0`.
-     - `Map<String, String?> predecessors`: Backtracking map.
-     - `CustomMinHeap<DijkstraEntry>`: Stores tentative distance records `(nodeId, distance)`.
-  3. Inserts `DijkstraEntry(startNodeId, 0.0)` into min-heap.
-  4. While min-heap is not empty:
-     - Extract entry with minimum distance: `current = heap.extractMin()`.
-     - If `current.distance > distances[current.nodeId]`, skip (stale entry).
-     - If `current.nodeId == targetNodeId`, target reached; break early.
-     - For each edge in `_adjacencyList[current.nodeId]`:
-       - Calculate tentative distance: `newDist = current.distance + edge.weight`.
-       - If `newDist < distances[edge.targetNodeId]`:
-         - `distances[edge.targetNodeId] = newDist`.
-         - `predecessors[edge.targetNodeId] = current.nodeId`.
-         - `heap.insert(DijkstraEntry(edge.targetNodeId, newDist))`.
-  5. If `targetNodeId` unreachable, returns `null`.
-  6. Reconstructs path by traversing `predecessors` backwards from target to start.
-  7. Returns `NavigationPath(nodes: pathList, totalDistance: distances[targetNodeId])`.
+- `void addVertex(GraphNode vertex)`:
+  - Registers vertex in `_vertices` and initializes its empty edge list in `_adjacency`.
+  - Rejects duplicate vertex IDs with `ArgumentError`.
+- `void addUndirectedEdge(String u, String v, double weight)`:
+  - Validates endpoints, non-negative finite weight, and absence of self-loops.
+  - Inserts symmetric directed entries `u -> v` and `v -> u`.
+  - Rejects existing duplicate edges.
+- `void addDirectedEdge(String sourceId, String targetId, double weight)`:
+  - Inserts single directed edge `sourceId -> targetId`.
+- `bool removeVertex(String id)`:
+  - Removes vertex, its outgoing edges, and all incoming edges from other vertices.
+- `bool removeEdge(String u, String v, {bool isBidirectional = true})`:
+  - Unlinks edge entries; decrements edge counters.
+- `List<GraphEdge> getAdjacentEdges(String vertexId)`:
+  - Returns `List.unmodifiable` view of edges leaving `vertexId`.
+- `bool validateConsistency()`:
+  - Verifies endpoint existence, weight non-negativity, absence of self-loops, and absence of duplicate edges.
+- `DijkstraResult Dijkstra.findShortestPath(WeightedGraph graph, String source, String destination)`:
+  1. Validates presence of `source` and `destination`.
+  2. If `source == destination`, immediately returns distance `0.0` and path `[source]`.
+  3. Initializes `distances[source] = 0.0`, `predecessors[source] = null`.
+  4. Inserts `DijkstraQueueEntry(source, 0.0)` into `CustomMinHeap`.
+  5. While heap is not empty:
+     - Extracts minimum entry: `current = minHeap.extractMin()!`.
+     - Skips stale entry if `current.tentativeDistance > distances[current.vertexId]`.
+     - Early exit: If `current.vertexId == destination`, halts search.
+     - For each outgoing edge `current -> neighbor`:
+       - Calculates `altDistance = current.tentativeDistance + edge.weight`.
+       - If `altDistance < (distances[neighbor] ?? infinity)`:
+         - Updates `distances[neighbor] = altDistance`.
+         - Records `predecessors[neighbor] = current.vertexId`.
+         - Inserts new `DijkstraQueueEntry(neighbor, altDistance)` into `CustomMinHeap`.
+  6. Reconstructs ordered path backwards from `destination` to `source` via `predecessors`.
+  7. If destination was never reached, returns `DijkstraResult.unreachable(...)`.
+- `DijkstraResult Dijkstra.computeAllShortestPaths(WeightedGraph graph, String source)`:
+  - Relaxes all reachable vertices until the heap is empty, producing distance and predecessor maps to all reachable nodes.
 
-### 5.4 Expected Inputs and Outputs
-- Input: `startNodeId = "GATE_1"`, `targetNodeId = "SLOT_A101"`.
-- Output: `NavigationPath`:
-  - `nodes`: `["GATE_1", "AISLE_1", "AISLE_2", "SLOT_A101"]`
-  - `totalDistance`: `48.5` (meters).
+### 5.4 SmartPark Facility Graph Integration
+Constructed via `ParkingGraphFactory.createFacilityGraph()` per `docs/PARKING_FACILITY_DESIGN.md`:
+- **Vertices ($|V| = 31$)**:
+  - 1 Entrance: `NODE_ENTRANCE` at $(2.0, 8.0)$.
+  - 10 Aisle Waypoints: `NODE_W01` to `NODE_W10` at $Y = 8.0\text{ m}$, $X = 6.0 + 3.0 \cdot (i - 1)\text{ m}$.
+  - 20 Parking Slots:
+    - Row A (North): `NODE_P01` to `NODE_P10` at $Y = 13.5\text{ m}$, $X = 6.0 + 3.0 \cdot (i - 1)\text{ m}$.
+    - Row B (South): `NODE_P11` to `NODE_P20` at $Y = 2.5\text{ m}$, $X = 6.0 + 3.0 \cdot (i - 1)\text{ m}$.
+- **Edges ($|E| = 30$ undirected / 60 directed entries)**:
+  - 1 Entrance link: `NODE_ENTRANCE` $\leftrightarrow$ `NODE_W01` ($4.0\text{ m}$).
+  - 9 Aisle backbone links: `NODE_W`$_i \leftrightarrow \text{NODE\_W}_{i+1}$ ($3.0\text{ m}$ each).
+  - 10 Row A slot links: `NODE_W`$_i \leftrightarrow \text{NODE\_P}_i$ ($5.5\text{ m}$ each).
+  - 10 Row B slot links: `NODE_W`$_i \leftrightarrow \text{NODE\_P}_{i+10}$ ($5.5\text{ m}$ each).
+- **Closed-Form Distance Formula**:
+  $$d(\text{NODE\_ENTRANCE}, P_k) = 4.0 + 3.0 \cdot (i - 1) + 5.5 = 9.5 + 3.0 \cdot (i - 1)\text{ meters} \quad \text{for } i \in [1, 10]$$
+- **Candidate Ranking Integration**:
+  - `ParkingGraphFactory.buildCandidates(...)` executes Dijkstra once from `NODE_ENTRANCE`, pairs each eligible `ParkingSlot` with its exact route distance, and emits `ParkingSlotCandidate` instances directly into `CustomMinHeap<ParkingSlotCandidate>`.
 
-### 5.5 Application Integration
-- Located in `frontend/lib/dsa/graph/`.
-- `NavigationService` downloads facility topology from `GET /api/layout/graph`.
-- When user taps "Navigate to Slot", the pathfinder computes optimal waypoint sequence and renders a vector path line on the parking map canvas.
+### 5.5 Expected Time and Space Complexity
+| Operation / Metric | Time Complexity | Auxiliary Space | Description |
+| :--- | :--- | :--- | :--- |
+| **`addVertex`** | $O(1)$ amortized | $O(1)$ | Backed by `CustomHashMap` insertion |
+| **`addUndirectedEdge`** | $O(1)$ amortized | $O(1)$ | Adjacency list append in both directions |
+| **`getAdjacentEdges`** | $O(\text{deg}(v))$ | $O(\text{deg}(v))$ | Unmodifiable view of outgoing edges |
+| **`containsVertex` / `getVertex`** | $O(1)$ average | $O(1)$ | Key lookup in `CustomHashMap` |
+| **`removeVertex`** | $O(V + \text{deg}(v))$ | $O(1)$ | Cleans incident links and registry |
+| **`removeEdge`** | $O(\text{deg}(u) + \text{deg}(v))$ | $O(1)$ | Scans adjacency lists of endpoints |
+| **`validateConsistency`** | $O(V + E)$ | $O(V + E)$ | Complete graph invariant verification |
+| **Dijkstra Shortest Path** | $O((V + E) \log V)$ | $O(V + E)$ | Priority queue with lazy duplicate entries |
+| **Total Graph Storage** | — | $O(V + E)$ | $V$ vertices and $2E$ directed edge entries |
 
-### 5.6 Expected Time and Space Complexity
-| Metric | Expression | Description |
-| :--- | :--- | :--- |
-| **Time Complexity** | $O((V + E) \log V)$ | Using `CustomMinHeap` priority queue |
-| **Space Complexity** | $O(V + E)$ | Adjacency list, distances, predecessors, heap |
+#### In-Depth Dijkstra Complexity Analysis
+- **Lazy Duplicate Entries**: When an edge is relaxed to a smaller tentative distance, a new `DijkstraQueueEntry` is inserted into `CustomMinHeap`. Since vertices are not re-keyed in place, the heap may temporarily contain multiple entries for the same vertex.
+- **Heap Insertions**: At most $1$ initial insertion + at most $E$ successful relaxations $\le E + 1$ total insertions. Each insertion takes $O(\log |Q|) \le O(\log (E + 1)) = O(\log V^2) = O(\log V)$ time.
+- **Heap Extractions**: At most $E + 1$ total extractions. Exactly $V$ extractions finalize the true shortest distance (or fewer under destination early-exit); at most $E - V + 1$ extractions pop stale entries and are discarded in $O(1)$ after comparison with `distances[vertexId]`.
+- **Edge Traversals**: Each outgoing edge is scanned only when its source vertex is settled, incurring $\sum_{v \in V} \text{outdeg}(v) = 2E$ traversals total.
+- **Combined Time Bound**: $O(V \log V + E \log V) = \mathbf{O((V + E) \log V)}$.
+- **Space Bound**: `distances` map stores $\le V$ entries, `predecessors` map stores $\le V$ entries, and the `CustomMinHeap` stores $\le E + 1$ entries, giving $\mathbf{O(V + E)}$ auxiliary space.
 
-*Where $V = |\text{NavigationNodes}|$ and $E = |\text{NavigationEdges}|$.*
-
-### 5.7 Testing Requirements (`test/dsa/graph/`)
-- Single node path: Start equals target returns 0 distance and 1-element path.
-- Direct edge path: Two nodes connected directly.
-- Multi-branch path: Graph with multiple diverging paths correctly chooses path with minimal cumulative weight.
-- Unreachable target: Disconnected component returns `null` or empty path gracefully.
-- Cycle handling: Graph containing cycles does not loop infinitely.
-- Bidirectional vs unidirectional edge behavior.
+### 5.6 Testing Summary (`test/dsa/graph/`)
+- **`weighted_graph_test.dart`**: Empty graph behavior, duplicate vertex rejection, bidirectional edge creation, one-way edges, unknown endpoint rejection, self-loop rejection, negative/infinite/NaN weight rejection, duplicate edge prevention, edge/vertex removal, unmodifiable collection views, consistency validation.
+- **`dijkstra_test.dart`**: Line graphs, diamond topology branch selection, source equals destination, unreachable destinations, unknown endpoint errors, zero-weight transitions, cycles, stale queue entry suppression, equal-weight tie-breaking, all-destinations computation, immutability guards.
+- **`parking_graph_factory_test.dart`**: Exactly 31 vertices, exactly 30 undirected edges, canonical vertex IDs, 3.0m aisle backbone, 5.5m slot connections, reachability of all 20 bays, closed-form distance verification, Verification 1 (P04: 18.5m) & Verification 2 (P08: 30.5m), closest bay (P11: 9.5m), furthest bay (P20: 36.5m), node ID mapping, and `CustomMinHeap<ParkingSlotCandidate>` recommendation queue integration.
 
 ---
 
@@ -306,8 +346,8 @@ An **Adjacency List** representation:
 
 | Algorithm | Decision Status | Current Choice | Alternatives Considered | Rationale |
 | :--- | :--- | :--- | :--- | :--- |
-| **HashMap** | Proposed | Separate Chaining with LinkedList buckets | Open Addressing (Linear Probing) | Separate chaining is simpler to implement and delete elements from in a student project without clustering artifacts. |
-| **Min-Heap** | Proposed | Contiguous Dynamic Array (0-indexed) | Pointer-based binary tree | Array-based binary heap offers $O(1)$ index calculations, zero pointer overhead, and cache locality. |
-| **Interval Tree**| Proposed | Augmented Binary Search Tree (ordered by `start`, augmented with `maxEnd`) | Segment Tree / Interval List | Interval tree efficiently supports dynamic reservation additions and arbitrary interval overlap queries. |
-| **Graph** | Proposed | Adjacency List + Dijkstra with Custom Min-Heap | Adjacency Matrix / Bellman-Ford | Adjacency list is optimal for sparse spatial parking maps ($E \ll V^2$); non-negative distances favor Dijkstra over Bellman-Ford. |
+| **HashMap** | Implemented (Phase 2.3) | Separate Chaining with LinkedList buckets | Open Addressing (Linear Probing) | Separate chaining is simpler to implement and delete elements from in a student project without clustering artifacts. |
+| **Min-Heap** | Implemented (Phase 2.4) | Contiguous Dynamic Array (0-indexed) | Pointer-based binary tree | Array-based binary heap offers $O(1)$ index calculations, zero pointer overhead, and cache locality. |
+| **Interval Tree**| Implemented (Phase 2.5) | Augmented AVL-Balanced Tree (ordered by `start`, augmented with `maxEnd`) | Unbalanced BST / Segment Tree | AVL height-balancing guarantees $O(\log n)$ worst-case insertion, deletion, and overlap queries under chronological bookings. |
+| **Graph + Dijkstra** | Implemented (Phase 2.6) | Adjacency List (CustomHashMap) + Dijkstra with CustomMinHeap | Adjacency Matrix / Bellman-Ford | Adjacency list is optimal for sparse spatial parking maps ($E \ll V^2$); non-negative distances favor Dijkstra over Bellman-Ford. CustomMinHeap integration reuses existing project DSA. |
 
