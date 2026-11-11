@@ -77,12 +77,19 @@ class _FacilityNavigationScreenState extends State<FacilityNavigationScreen> {
     });
   }
 
+  int _extractSlotNumber(ParkingSlot slot) {
+    final match = RegExp(r'\d+').firstMatch(slot.slotCode);
+    return match != null ? int.tryParse(match.group(0)!) ?? 0 : 0;
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = SmartParkScope.of(context);
     final allSlots = controller.slotService.getAllSlots();
-    final rowASlots = allSlots.where((s) => s.row == SlotRow.a).toList();
-    final rowBSlots = allSlots.where((s) => s.row == SlotRow.b).toList();
+    final rowASlots = allSlots.where((s) => s.row == SlotRow.a).toList()
+      ..sort((a, b) => _extractSlotNumber(a).compareTo(_extractSlotNumber(b)));
+    final rowBSlots = allSlots.where((s) => s.row == SlotRow.b).toList()
+      ..sort((a, b) => _extractSlotNumber(a).compareTo(_extractSlotNumber(b)));
 
     final topRecommendation =
         controller.recommendationService.getTopRecommendation();

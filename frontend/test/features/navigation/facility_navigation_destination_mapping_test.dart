@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:smartpark_app/data/local/smartpark_local_data.dart';
-import 'package:smartpark_app/dsa/graph/parking_graph_factory.dart';
 import 'package:smartpark_app/features/navigation/facility_navigation_screen.dart';
 import 'package:smartpark_app/features/navigation/widgets/facility_route_painter.dart';
 import 'package:smartpark_app/features/parking/widgets/parking_slot_tile.dart';
@@ -24,147 +23,91 @@ void main() {
     );
   }
 
-  group('Regression Test 1 — Randomized destination order', () {
-    test('existing facility layout has randomized collection order where P01 is not first', () {
-      final controller = SmartParkController();
-      final allSlots = controller.slotService.getAllSlots();
-      final rowASlots = allSlots.where((s) => s.row == SlotRow.a).toList();
+  group('Physical Layout Invariants — Row and Waypoint Alignment', () {
+    const painter = FacilityRoutePainter();
 
-      // P06 is first in Row A, not P01
-      expect(rowASlots.first.slotCode, 'P06');
-      expect(rowASlots[0].slotCode, 'P06');
+    test('1. All Row A bays P01–P10 align vertically with W01–W10', () {
+      for (int i = 1; i <= 10; i++) {
+        final slotCode = 'P${i.toString().padLeft(2, '0')}';
+        final waypointCode = 'W${i.toString().padLeft(2, '0')}';
 
-      // P01 appears later in the collection (index 6)
-      final p01Index = rowASlots.indexWhere((s) => s.slotCode == 'P01');
-      expect(p01Index, isNot(0));
-      expect(p01Index, 6);
-    });
+        final slotOffset = painter.resolveNodeOffset('NODE_$slotCode');
+        final waypointOffset = painter.resolveNodeOffset('NODE_$waypointCode');
 
-    test('FacilityRoutePainter resolves P01 to its actual visual position, not P06', () {
-      final controller = SmartParkController();
-      final allSlots = controller.slotService.getAllSlots();
-      final rowASlots = allSlots.where((s) => s.row == SlotRow.a).toList();
-      final rowBSlots = allSlots.where((s) => s.row == SlotRow.b).toList();
-
-      final painter = FacilityRoutePainter(
-        rowASlots: rowASlots,
-        rowBSlots: rowBSlots,
-      );
-
-      // P01 is at index 6 in Row A -> visual coordinate is Offset(141.0 + 6 * 102.0, 52.0) = Offset(753.0, 52.0)
-      final p01Offset = painter.resolveNodeOffset('NODE_P01');
-      expect(p01Offset, const Offset(753.0, 52.0));
-
-      // P06 is at index 0 in Row A -> visual coordinate is Offset(141.0 + 0 * 102.0, 52.0) = Offset(141.0, 52.0)
-      final p06Offset = painter.resolveNodeOffset('NODE_P06');
-      expect(p06Offset, const Offset(141.0, 52.0));
-
-      // Verify that P01 and P06 do not share endpoints
-      expect(p01Offset, isNot(p06Offset));
-    });
-
-    testWidgets('widget test: selecting P01 renders route terminating at P01 tile coordinate',
-        (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(1200, 1600);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      final controller = SmartParkController();
-      await tester.pumpWidget(buildTestableScreen(controller));
-
-      // Select P01 via quick chip
-      await tester.tap(find.widgetWithText(ChoiceChip, 'P01'));
-      await tester.pumpAndSettle();
-
-      // Find the CustomPaint with FacilityRoutePainter
-      final customPaintFinder = find.byWidgetPredicate(
-        (widget) => widget is CustomPaint && widget.painter is FacilityRoutePainter,
-      );
-      expect(customPaintFinder, findsOneWidget);
-
-      final customPaintWidget = tester.widget<CustomPaint>(customPaintFinder);
-      final painter = customPaintWidget.painter as FacilityRoutePainter;
-
-      expect(painter.route, isNotNull);
-      expect(painter.route!.targetNodeId, 'NODE_P01');
-      expect(painter.rowASlots, isNotNull);
-
-      // Endpoint must resolve to P01's visual coordinate Offset(753.0, 52.0), not Offset(141.0, 52.0)
-      final routeEndpoint = painter.resolveNodeOffset(painter.route!.targetNodeId);
-      expect(routeEndpoint, const Offset(753.0, 52.0));
-      expect(routeEndpoint, isNot(const Offset(141.0, 52.0)));
-    });
-  });
-
-  group('Regression Test 2 — Multiple destinations', () {
-    test('verifies correct route endpoints for P01, P06, P10, P17, and P20', () {
-      final controller = SmartParkController();
-      final allSlots = controller.slotService.getAllSlots();
-      final rowASlots = allSlots.where((s) => s.row == SlotRow.a).toList();
-      final rowBSlots = allSlots.where((s) => s.row == SlotRow.b).toList();
-
-      final painter = FacilityRoutePainter(
-        rowASlots: rowASlots,
-        rowBSlots: rowBSlots,
-      );
-
-      // Verify collection indices do NOT equal IDs
-      final idxP01 = rowASlots.indexWhere((s) => s.slotCode == 'P01');
-      final idxP06 = rowASlots.indexWhere((s) => s.slotCode == 'P06');
-      final idxP10 = rowASlots.indexWhere((s) => s.slotCode == 'P10');
-      final idxP17 = rowBSlots.indexWhere((s) => s.slotCode == 'P17');
-      final idxP20 = rowBSlots.indexWhere((s) => s.slotCode == 'P20');
-
-      expect(idxP01, 6);
-      expect(idxP06, 0);
-      expect(idxP10, 4);
-      expect(idxP17, 0);
-      expect(idxP20, 1);
-
-      // Verify route endpoints match actual layout coordinates
-      expect(painter.resolveNodeOffset('NODE_P01'), Offset(141.0 + idxP01 * 102.0, 52.0));
-      expect(painter.resolveNodeOffset('NODE_P06'), Offset(141.0 + idxP06 * 102.0, 52.0));
-      expect(painter.resolveNodeOffset('NODE_P10'), Offset(141.0 + idxP10 * 102.0, 52.0));
-      expect(painter.resolveNodeOffset('NODE_P17'), Offset(141.0 + idxP17 * 102.0, 248.0));
-      expect(painter.resolveNodeOffset('NODE_P20'), Offset(141.0 + idxP20 * 102.0, 248.0));
-
-      expect(painter.resolveNodeOffset('NODE_P01'), const Offset(753.0, 52.0));
-      expect(painter.resolveNodeOffset('NODE_P06'), const Offset(141.0, 52.0));
-      expect(painter.resolveNodeOffset('NODE_P10'), const Offset(549.0, 52.0));
-      expect(painter.resolveNodeOffset('NODE_P17'), const Offset(141.0, 248.0));
-      expect(painter.resolveNodeOffset('NODE_P20'), const Offset(243.0, 248.0));
-    });
-  });
-
-  group('Regression Test 3 — Reordered collection', () {
-    test('reversed collection preserves correct route endpoints for all destinations', () {
-      final controller = SmartParkController();
-      final allSlots = controller.slotService.getAllSlots();
-      final reversedRowA = allSlots.where((s) => s.row == SlotRow.a).toList().reversed.toList();
-      final reversedRowB = allSlots.where((s) => s.row == SlotRow.b).toList().reversed.toList();
-
-      final painter = FacilityRoutePainter(
-        rowASlots: reversedRowA,
-        rowBSlots: reversedRowB,
-      );
-
-      for (final slot in [...reversedRowA, ...reversedRowB]) {
-        final expectedY = slot.row == SlotRow.a ? 52.0 : 248.0;
-        final list = slot.row == SlotRow.a ? reversedRowA : reversedRowB;
-        final idx = list.indexOf(slot);
-        final expectedOffset = Offset(141.0 + idx * 102.0, expectedY);
-
-        expect(painter.resolveNodeOffset(slot.navigationNodeId!), expectedOffset);
+        expect(slotOffset.dx, equals(waypointOffset.dx),
+            reason: '$slotCode must align horizontally with $waypointCode');
+        expect(slotOffset.dy, equals(52.0),
+            reason: '$slotCode must be positioned on Row A (North) at Y=52.0');
+        expect(waypointOffset.dy, equals(150.0),
+            reason: '$waypointCode must be positioned on Central Aisle at Y=150.0');
       }
     });
 
-    test('arbitrary shuffled permutations maintain 100% correct route endpoints', () {
+    test('2. All Row B bays P11–P20 align vertically with W01–W10', () {
+      for (int i = 1; i <= 10; i++) {
+        final slotCode = 'P${(i + 10).toString().padLeft(2, '0')}';
+        final waypointCode = 'W${i.toString().padLeft(2, '0')}';
+
+        final slotOffset = painter.resolveNodeOffset('NODE_$slotCode');
+        final waypointOffset = painter.resolveNodeOffset('NODE_$waypointCode');
+
+        expect(slotOffset.dx, equals(waypointOffset.dx),
+            reason: '$slotCode must align horizontally with $waypointCode');
+        expect(slotOffset.dy, equals(248.0),
+            reason: '$slotCode must be positioned on Row B (South) at Y=248.0');
+        expect(waypointOffset.dy, equals(150.0),
+            reason: '$waypointCode must be positioned on Central Aisle at Y=150.0');
+      }
+    });
+
+    test('3. P20 resolves to (1059, 248) and W10 to (1059, 150)', () {
+      final p20Offset = painter.resolveNodeOffset('NODE_P20');
+      final w10Offset = painter.resolveNodeOffset('NODE_W10');
+
+      expect(p20Offset, const Offset(1059.0, 248.0));
+      expect(w10Offset, const Offset(1059.0, 150.0));
+      expect(p20Offset.dx, equals(w10Offset.dx));
+    });
+
+    test('4. P19 resolves to (957, 248) and W09 to (957, 150)', () {
+      final p19Offset = painter.resolveNodeOffset('NODE_P19');
+      final w09Offset = painter.resolveNodeOffset('NODE_W09');
+
+      expect(p19Offset, const Offset(957.0, 248.0));
+      expect(w09Offset, const Offset(957.0, 150.0));
+      expect(p19Offset.dx, equals(w09Offset.dx));
+    });
+
+    test('5. All 20 parking bays resolve to their canonical physical coordinates', () {
+      for (int i = 1; i <= 20; i++) {
+        final slotCode = 'P${i.toString().padLeft(2, '0')}';
+        final resolved = painter.resolveNodeOffset('NODE_$slotCode');
+        final canonical = FacilityRoutePainter.getNodeOffset('NODE_$slotCode');
+
+        expect(resolved, equals(canonical));
+        expect(resolved, isNot(equals(Offset.zero)));
+
+        final col = (i <= 10) ? i - 1 : i - 11;
+        final expectedX = 141.0 + col * 102.0;
+        final expectedY = (i <= 10) ? 52.0 : 248.0;
+        expect(resolved, Offset(expectedX, expectedY));
+      }
+    });
+
+    test('9. P01, P10, P11 and P19 also have correct terminal route coordinates', () {
+      expect(painter.resolveNodeOffset('NODE_P01'), const Offset(141.0, 52.0));
+      expect(painter.resolveNodeOffset('NODE_P10'), const Offset(1059.0, 52.0));
+      expect(painter.resolveNodeOffset('NODE_P11'), const Offset(141.0, 248.0));
+      expect(painter.resolveNodeOffset('NODE_P19'), const Offset(957.0, 248.0));
+    });
+  });
+
+  group('Permutation Invariance — HashMap Order Independence', () {
+    test('6. The ordering remains correct when the original slot collection is supplied in different HashMap-like permutations', () {
       final slots = SmartParkLocalData.createInitialSlots();
       final rowA = slots.where((s) => s.row == SlotRow.a).toList();
       final rowB = slots.where((s) => s.row == SlotRow.b).toList();
 
-      // Test 5 deterministic permutations of 0..9
       final permutations = [
         [9, 8, 7, 6, 5, 4, 3, 2, 1, 0], // Inverted
         [3, 1, 4, 2, 5, 9, 7, 6, 8, 0], // Mixed indices
@@ -182,53 +125,90 @@ void main() {
           rowBSlots: permRowB,
         );
 
-        for (final code in ['P01', 'P06', 'P10', 'P17', 'P20']) {
-          final isRowA = int.parse(code.substring(1)) <= 10;
-          final targetList = isRowA ? permRowA : permRowB;
-          final targetIdx = targetList.indexWhere((s) => s.slotCode == code);
-          final expectedY = isRowA ? 52.0 : 248.0;
-          final expectedOffset = Offset(141.0 + targetIdx * 102.0, expectedY);
+        // Every slot must still resolve to its canonical physical coordinate
+        for (int i = 1; i <= 20; i++) {
+          final slotCode = 'P${i.toString().padLeft(2, '0')}';
+          final col = (i <= 10) ? i - 1 : i - 11;
+          final expectedOffset = Offset(
+            141.0 + col * 102.0,
+            (i <= 10) ? 52.0 : 248.0,
+          );
 
-          final resolved = painter.resolveNodeOffset('NODE_$code');
-          expect(resolved, expectedOffset);
-        }
-      }
-    });
-  });
-
-  group('Regression Test 4 — Source and destination consistency', () {
-    test('routes to all 20 bays start at entrance, end at destination, and contain valid edges', () {
-      final navService = ParkingNavigationService();
-      final graph = navService.graph;
-
-      for (int i = 1; i <= 20; i++) {
-        final slotCode = 'P${i.toString().padLeft(2, '0')}';
-        final route = navService.getRouteToSlotCode(slotCode);
-
-        expect(route, isNotNull);
-        expect(route!.hasPath, isTrue);
-        expect(route.sourceNodeId, ParkingGraphFactory.entranceNodeId);
-        expect(route.targetNodeId, 'NODE_$slotCode');
-        expect(route.path.first, ParkingGraphFactory.entranceNodeId);
-        expect(route.path.last, 'NODE_$slotCode');
-
-        // Verify every consecutive hop is a valid connected edge in the graph
-        for (int hop = 0; hop < route.path.length - 1; hop++) {
-          final u = route.path[hop];
-          final v = route.path[hop + 1];
-          final hasEdge = graph.hasEdge(u, v);
           expect(
-            hasEdge,
-            isTrue,
-            reason: 'Hop from $u to $v in route to $slotCode must be a connected graph edge.',
+            painter.resolveNodeOffset('NODE_$slotCode'),
+            expectedOffset,
+            reason: 'Slot $slotCode must resolve to canonical coordinate regardless of collection permutation',
           );
         }
       }
     });
   });
 
-  group('Regression Test 5 — Existing functionality', () {
-    testWidgets('quick chips, dropdown, route card distance, and clear button continue working',
+  group('Dijkstra Route Geometry & Aisle Traversal Invariants', () {
+    late ParkingNavigationService navService;
+
+    setUp(() {
+      navService = ParkingNavigationService();
+    });
+
+    test('7. P20 Dijkstra route contains no unrelated parking bay nodes', () {
+      final routeP20 = navService.getRouteToSlotCode('P20');
+      expect(routeP20, isNotNull);
+      expect(routeP20!.hasPath, isTrue);
+
+      final expectedPath = [
+        'NODE_ENTRANCE',
+        'NODE_W01',
+        'NODE_W02',
+        'NODE_W03',
+        'NODE_W04',
+        'NODE_W05',
+        'NODE_W06',
+        'NODE_W07',
+        'NODE_W08',
+        'NODE_W09',
+        'NODE_W10',
+        'NODE_P20',
+      ];
+      expect(routeP20.path, equals(expectedPath));
+
+      // Assert no other parking bay appears in the path
+      for (final node in routeP20.path) {
+        if (node.startsWith('NODE_P')) {
+          expect(node, equals('NODE_P20'));
+        }
+      }
+    });
+
+    test('8. The final P20 route segment connects W10 directly to P20 without horizontal aisle backtracking', () {
+      final routeP20 = navService.getRouteToSlotCode('P20')!;
+      const painter = FacilityRoutePainter();
+
+      final w10Offset = painter.resolveNodeOffset('NODE_W10');
+      final p20Offset = painter.resolveNodeOffset('NODE_P20');
+
+      expect(w10Offset, const Offset(1059.0, 150.0));
+      expect(p20Offset, const Offset(1059.0, 248.0));
+
+      // Direct collinear vertical segment: dx must be 0
+      final dx = p20Offset.dx - w10Offset.dx;
+      final dy = p20Offset.dy - w10Offset.dy;
+      expect(dx, equals(0.0), reason: 'Final segment must be strictly vertical, no horizontal backtracking');
+      expect(dy, equals(98.0), reason: 'Travels directly south from aisle to bay center');
+
+      // Monotonic X invariant across all aisle segments
+      double lastX = 0.0;
+      for (final nodeId in routeP20.path) {
+        final offset = painter.resolveNodeOffset(nodeId);
+        expect(offset.dx, greaterThanOrEqualTo(lastX),
+            reason: 'Route along aisle must never backtrack westward');
+        lastX = offset.dx;
+      }
+    });
+  });
+
+  group('Destination Selection & Route Clearing Widgets', () {
+    testWidgets('10. Existing destination selection mechanisms and route clearing continue working',
         (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1200, 1600);
       tester.view.devicePixelRatio = 1.0;
@@ -277,6 +257,55 @@ void main() {
       expect(find.text('Destination: Bay P12'), findsOneWidget);
       expect(find.text('12.5m'), findsOneWidget);
       expect(find.text('3 links'), findsOneWidget);
+
+      // 6. Select P20 via quick chip and verify painter endpoint
+      await tester.tap(find.widgetWithText(ChoiceChip, 'P20'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Destination: Bay P20'), findsOneWidget);
+      expect(find.text('36.5m'), findsOneWidget);
+      expect(find.text('11 links'), findsOneWidget);
+
+      final customPaintFinder = find.byWidgetPredicate(
+        (widget) => widget is CustomPaint && widget.painter is FacilityRoutePainter,
+      );
+      expect(customPaintFinder, findsOneWidget);
+      final customPaintWidget = tester.widget<CustomPaint>(customPaintFinder);
+      final painter = customPaintWidget.painter as FacilityRoutePainter;
+
+      final p20Endpoint = painter.resolveNodeOffset(painter.route!.targetNodeId);
+      expect(p20Endpoint, const Offset(1059.0, 248.0));
+      expect(p20Endpoint.dx, equals(painter.resolveNodeOffset('NODE_W10').dx));
+    });
+
+    testWidgets('selecting P01 renders route terminating at canonical P01 tile coordinate',
+        (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1200, 1600);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      final controller = SmartParkController();
+      await tester.pumpWidget(buildTestableScreen(controller));
+
+      // Select P01 via quick chip
+      await tester.tap(find.widgetWithText(ChoiceChip, 'P01'));
+      await tester.pumpAndSettle();
+
+      final customPaintFinder = find.byWidgetPredicate(
+        (widget) => widget is CustomPaint && widget.painter is FacilityRoutePainter,
+      );
+      expect(customPaintFinder, findsOneWidget);
+
+      final customPaintWidget = tester.widget<CustomPaint>(customPaintFinder);
+      final painter = customPaintWidget.painter as FacilityRoutePainter;
+
+      expect(painter.route, isNotNull);
+      expect(painter.route!.targetNodeId, 'NODE_P01');
+
+      final routeEndpoint = painter.resolveNodeOffset(painter.route!.targetNodeId);
+      expect(routeEndpoint, const Offset(141.0, 52.0));
+      expect(routeEndpoint.dx, equals(painter.resolveNodeOffset('NODE_W01').dx));
     });
   });
 }

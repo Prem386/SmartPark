@@ -41,53 +41,48 @@ class FacilityRoutePainter extends CustomPainter {
     this.rowBSlots,
   });
 
-  /// Maps canonical graph vertex ID to canvas center coordinates, accounting for
-  /// actual layout order of [rowASlots] and [rowBSlots].
+  /// Maps canonical graph vertex ID to canvas center coordinates.
   Offset resolveNodeOffset(String nodeId) {
-    if (nodeId == 'NODE_ENTRANCE') {
-      return const Offset(41.0, 150.0);
+    final direct = getNodeOffset(nodeId);
+    if (direct != Offset.zero) {
+      return direct;
     }
 
-    final wMatch = RegExp(r'^NODE_W(\d+)$').firstMatch(nodeId);
-    if (wMatch != null) {
-      final idx = int.tryParse(wMatch.group(1)!);
-      if (idx != null && idx >= 1 && idx <= 10) {
-        return Offset(141.0 + (idx - 1) * 102.0, 150.0);
-      }
-    }
-
-    // Try resolving against actual Row A slots layout order
+    // Fallback: search row collections if a non-canonical slot id was passed
+    final clean = nodeId.trim().toUpperCase();
     if (rowASlots != null) {
-      final idxA = rowASlots!.indexWhere((s) =>
-          s.navigationNodeId == nodeId ||
-          'NODE_${s.slotCode.toUpperCase()}' == nodeId ||
-          s.id.toUpperCase() == nodeId.replaceFirst('NODE_', ''));
-      if (idxA != -1) {
-        return Offset(141.0 + idxA * 102.0, 52.0);
+      for (final s in rowASlots!) {
+        if (s.navigationNodeId?.toUpperCase() == clean ||
+            s.slotCode.toUpperCase() == clean ||
+            s.id.toUpperCase() == clean) {
+          final offset = getNodeOffset(s.navigationNodeId ?? s.slotCode);
+          if (offset != Offset.zero) return offset;
+        }
       }
     }
 
-    // Try resolving against actual Row B slots layout order
     if (rowBSlots != null) {
-      final idxB = rowBSlots!.indexWhere((s) =>
-          s.navigationNodeId == nodeId ||
-          'NODE_${s.slotCode.toUpperCase()}' == nodeId ||
-          s.id.toUpperCase() == nodeId.replaceFirst('NODE_', ''));
-      if (idxB != -1) {
-        return Offset(141.0 + idxB * 102.0, 248.0);
+      for (final s in rowBSlots!) {
+        if (s.navigationNodeId?.toUpperCase() == clean ||
+            s.slotCode.toUpperCase() == clean ||
+            s.id.toUpperCase() == clean) {
+          final offset = getNodeOffset(s.navigationNodeId ?? s.slotCode);
+          if (offset != Offset.zero) return offset;
+        }
       }
     }
 
-    return getNodeOffset(nodeId);
+    return Offset.zero;
   }
 
   /// Maps canonical graph vertex ID to canvas center coordinates.
   static Offset getNodeOffset(String nodeId) {
-    if (nodeId == 'NODE_ENTRANCE') {
+    final clean = nodeId.trim().toUpperCase();
+    if (clean == 'NODE_ENTRANCE' || clean == 'ENTRANCE') {
       return const Offset(41.0, 150.0);
     }
 
-    final wMatch = RegExp(r'^NODE_W(\d+)$').firstMatch(nodeId);
+    final wMatch = RegExp(r'^(?:NODE_)?W(\d+)$').firstMatch(clean);
     if (wMatch != null) {
       final idx = int.tryParse(wMatch.group(1)!);
       if (idx != null && idx >= 1 && idx <= 10) {
@@ -95,7 +90,7 @@ class FacilityRoutePainter extends CustomPainter {
       }
     }
 
-    final pMatch = RegExp(r'^NODE_P(\d+)$').firstMatch(nodeId);
+    final pMatch = RegExp(r'^(?:NODE_)?P(\d+)$').firstMatch(clean);
     if (pMatch != null) {
       final num = int.tryParse(pMatch.group(1)!);
       if (num != null) {
@@ -170,46 +165,10 @@ class FacilityRoutePainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     // 1. Paint all 30 standard facility connections
-    if (rowASlots != null || rowBSlots != null) {
-      // Entrance to Waypoint 1
-      canvas.drawLine(
-        resolveNodeOffset('NODE_ENTRANCE'),
-        resolveNodeOffset('NODE_W01'),
-        normalEdgePaint,
-      );
-
-      // 9 Aisle backbone segments
-      for (int i = 1; i <= 9; i++) {
-        final w1 = 'NODE_W${i.toString().padLeft(2, '0')}';
-        final w2 = 'NODE_W${(i + 1).toString().padLeft(2, '0')}';
-        canvas.drawLine(
-          resolveNodeOffset(w1),
-          resolveNodeOffset(w2),
-          normalEdgePaint,
-        );
-      }
-
-      // 10 Waypoint to Row A slot segments
-      final countA = rowASlots?.length ?? 10;
-      for (int i = 0; i < countA && i < 10; i++) {
-        final wNode = 'NODE_W${(i + 1).toString().padLeft(2, '0')}';
-        final wOffset = resolveNodeOffset(wNode);
-        final slotOffset = Offset(141.0 + i * 102.0, 52.0);
-        canvas.drawLine(wOffset, slotOffset, normalEdgePaint);
-      }
-
-      // 10 Waypoint to Row B slot segments
-      final countB = rowBSlots?.length ?? 10;
-      for (int i = 0; i < countB && i < 10; i++) {
-        final wNode = 'NODE_W${(i + 1).toString().padLeft(2, '0')}';
-        final wOffset = resolveNodeOffset(wNode);
-        final slotOffset = Offset(141.0 + i * 102.0, 248.0);
-        canvas.drawLine(wOffset, slotOffset, normalEdgePaint);
-      }
-    } else {
-      for (final edge in facilityEdges) {
-        final p1 = getNodeOffset(edge.$1);
-        final p2 = getNodeOffset(edge.$2);
+    for (final edge in facilityEdges) {
+      final p1 = resolveNodeOffset(edge.$1);
+      final p2 = resolveNodeOffset(edge.$2);
+      if (p1 != Offset.zero && p2 != Offset.zero) {
         canvas.drawLine(p1, p2, normalEdgePaint);
       }
     }
@@ -223,24 +182,12 @@ class FacilityRoutePainter extends CustomPainter {
         final p1 = resolveNodeOffset(fromNode);
         final p2 = resolveNodeOffset(toNode);
 
-        // If transitioning between waypoint on aisle and slot in a different column,
-        // navigate along the central aisle to the bay's column before turning in
-        if ((p1.dy - 150.0).abs() < 1.0 &&
-            (p2.dy - 150.0).abs() > 1.0 &&
-            (p1.dx - p2.dx).abs() > 1.0) {
-          final pAisleTurn = Offset(p2.dx, p1.dy);
-          // Aisle travel segment
-          canvas.drawLine(p1, pAisleTurn, routeEdgePaint);
-          _drawDirectionalArrow(canvas, p1, pAisleTurn, arrowPaint);
-
-          // Turn-in segment
-          canvas.drawLine(pAisleTurn, p2, routeEdgePaint);
-          _drawDirectionalArrow(canvas, pAisleTurn, p2, arrowPaint);
-        } else {
-          // Normal direct segment
-          canvas.drawLine(p1, p2, routeEdgePaint);
-          _drawDirectionalArrow(canvas, p1, p2, arrowPaint);
+        if (p1 == Offset.zero || p2 == Offset.zero) {
+          continue;
         }
+
+        canvas.drawLine(p1, p2, routeEdgePaint);
+        _drawDirectionalArrow(canvas, p1, p2, arrowPaint);
       }
     }
   }
