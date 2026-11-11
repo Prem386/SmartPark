@@ -438,7 +438,70 @@ frontend/lib/features/bookings/
 - **Dynamic Metrics**: Dashboard availability summary counters update dynamically whenever bookings change slot status.
 - **In-Memory Volatility**: All changes exist in client runtime memory; triggering "Reset Data to Defaults" restores initial baseline slots and sample bookings.
 
+---
 
+## 11. Phase 3.3 — Facility Navigation Interface
 
+### 11.1 Feature Structure and Organization
+Phase 3.3 implements the facility navigation domain located under `frontend/lib/features/navigation/`:
+```text
+frontend/lib/features/navigation/
+├── facility_navigation_screen.dart       # Primary navigation screen coordinating layout, selection, and route metrics
+└── widgets/
+    ├── destination_selector_bar.dart     # Destination bay dropdown picker, clear action, and quick-select chips
+    ├── facility_route_painter.dart       # Custom vector painter rendering all 30 graph edges and Dijkstra shortest path
+    ├── navigation_facility_layout.dart   # Interactive single-floor facility diagram (Entrance, Row A, Aisle, Row B)
+    └── navigation_route_card.dart        # Route summary metrics card and turn-by-turn waypoint breakdown
+```
 
+### 11.2 Navigation Service & Dijkstra Integration Architecture
+- **Zero Redundancy**: The UI does not calculate shortest paths, duplicate graph structures, or compute distances independently.
+- **Invocation Flow**:
+  $$\text{Navigation UI} \longrightarrow \text{SmartParkScope} \longrightarrow \text{ParkingNavigationService} \longrightarrow \text{WeightedGraph} + \text{Dijkstra} \longrightarrow \text{NavigationRoute}$$
+- **Authoritative Execution**:
+  - `controller.navigationService.getRouteToSlotCode(slotCode)` delegates directly to `Dijkstra.findShortestPath(graph, 'NODE_ENTRANCE', targetNodeId)`.
+  - The returned immutable `NavigationRoute` encapsulates `sourceNodeId`, `targetNodeId`, `slotCode`, `distance` (in meters), `path` (ordered node ID sequence), and `hasPath` reachability boolean.
+  - The UI consumes this value object as its single source of truth for routing.
+
+### 11.3 Facility Map & Route Vector Visualization
+- **Topological Integrity**: The facility layout mirrors the 38.0m $\times$ 16.0m specification from `docs/PARKING_FACILITY_DESIGN.md`:
+  - Main Entrance: West boundary at $(X=2.0\text{ m}, Y=8.0\text{ m})$ (`NODE_ENTRANCE`).
+  - Central Driving Aisle: Centerline at $Y=8.0\text{ m}$ with 10 waypoints $W01$–$W10$ spaced at 3.0m intervals ($X=6.0\text{ m}$ to $33.0\text{ m}$).
+  - Row A (North): Bays P01–P10 at $Y=13.5\text{ m}$.
+  - Row B (South): Bays P11–P20 at $Y=2.5\text{ m}$.
+- **Dual-Layer Compositing**:
+  - **Layer 1 (`FacilityRoutePainter`)**: CustomPainter drawing all 30 facility connections:
+    - Normal facility links: rendered in slate 300 (`#CBD5E1`) with 2.5px stroke.
+    - Active Dijkstra path: rendered in primary blue (`#2563EB`) with 5.0px stroke, round caps, and directional chevrons indicating vehicle travel from Entrance to destination bay.
+  - **Layer 2 (Interactive Widgets)**:
+    - Entrance gate with dynamic "START" / "ENTRY" badge.
+    - 10 column pairs with `ParkingSlotTile` components for Row A and Row B bays.
+    - Central waypoint cards ($W01$–$W10$) with step index badges (e.g., `#1`, `#2`) along active paths.
+- **Horizontal Responsiveness**: Wrapped in a horizontal `SingleChildScrollView` (1102px total diagram width) eliminating clipping across viewports.
+
+### 11.4 Destination Selection & State Handling
+The interface supports multiple destination selection mechanisms and handles 6 navigation states:
+1. **Selection Mechanisms**:
+   - Direct tapping on any of the 20 bay tiles on the facility diagram.
+   - Dropdown selection via `DestinationSelectorBar` (`DropdownButtonFormField`).
+   - Quick-select chips (P01, P04, P10, P11, P15, P20) and dynamic "Optimal" recommendation chip.
+   - Programmatic pre-selection via `FacilityNavigationScreen(initialSlotCode: 'P04')`.
+2. **Navigation States**:
+   - `No destination selected`: Prompt card displayed; facility diagram shows normal neutral connections.
+   - `Destination selected & route calculated`: Dijkstra path rendered; route details card displays metrics.
+   - `Destination changed`: Path instantly recalculates and refreshes without page reloads.
+   - `Route cleared`: Resets state cleanly via app bar action or route card button.
+   - `Invalid destination`: Safe error banner shown if bay does not exist in graph.
+   - `Unreachable destination`: Warning banner shown if destination has no traversable path (`hasPath == false`).
+
+### 11.5 Ordered Route Information & Hop-by-Hop Breakdown
+- **Distance Accuracy**: Distance is read directly from `NavigationRoute.distance` (e.g., 9.5m for P01/P11, 18.5m for P04/P14, 36.5m for P10/P20), guaranteeing exact correspondence with Dijkstra calculation.
+- **Turn-by-Turn Waypoints**:
+  - Displays complete ordered vertex sequence from origin to destination.
+  - Resolves segment weights and node labels directly from `WeightedGraph.getAdjacentEdges()`.
+  - Shows start gate, intermediate aisle waypoints with segment travel distances, and arrival target bay.
+
+### 11.6 Application Navigation & Controller Integration
+- **Dashboard Quick Action**: The "Facility Navigation" action tile in `DashboardScreen` routes to `FacilityNavigationScreen`.
+- **State Reactivity**: Listens to `SmartParkScope`; external slot mutations (e.g. occupancy changes) automatically reflect on layout bay tiles without disrupting navigation route state.
 

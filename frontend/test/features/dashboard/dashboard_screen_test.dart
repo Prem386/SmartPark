@@ -115,7 +115,7 @@ void main() {
       expect(find.text('SmartPark Dashboard'), findsOneWidget);
     });
 
-    testWidgets('unimplemented quick action tiles trigger expected snackbars',
+    testWidgets('facility navigation quick action navigates to FacilityNavigationScreen and back',
         (WidgetTester tester) async {
       final controller = SmartParkController();
       await tester.pumpWidget(buildTestableDashboard(controller));
@@ -123,8 +123,18 @@ void main() {
       // Scroll to and tap Facility Navigation
       await tester.ensureVisible(find.text('Facility Navigation'));
       await tester.tap(find.text('Facility Navigation'));
-      await tester.pump();
-      expect(find.text('Turn-by-turn navigation available in Phase 3.3.'), findsOneWidget);
+      await tester.pumpAndSettle();
+
+      // Verify FacilityNavigationScreen is displayed
+      expect(find.text('Facility Navigation (Floor 1)'), findsOneWidget);
+      expect(find.text('Shortest-path routing via custom Weighted Graph & Dijkstra algorithm'), findsOneWidget);
+
+      // Tap back button
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+
+      // Verify returned to Dashboard
+      expect(find.text('SmartPark Dashboard'), findsOneWidget);
     });
 
     testWidgets('app bar reset action restores default counts',

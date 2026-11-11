@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 import '../../widgets/smartpark_scope.dart';
 import '../bookings/bookings_screen.dart';
+import '../navigation/facility_navigation_screen.dart';
 import '../parking/parking_slots_screen.dart';
 
 /// Primary dashboard shell for SmartPark.
@@ -244,9 +245,9 @@ class DashboardScreen extends StatelessWidget {
           title: 'Facility Navigation',
           subtitle: 'Find turn-by-turn route from entrance to any slot',
           onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Turn-by-turn navigation available in Phase 3.3.'),
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const FacilityNavigationScreen(),
               ),
             );
           },
