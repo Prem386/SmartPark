@@ -330,5 +330,39 @@ The application initialization sequence occurs at startup in `main.dart` / `Smar
 2. UI widgets never directly manipulate DSA structures or implement search/sorting algorithms.
 3. Dashboard availability metrics (Total, Available, Occupied, Reserved, Maintenance) are computed dynamically from `slotService.getAllSlots()`, never hardcoded into UI presentation code.
 
+---
+
+## 9. Phase 3.1 — Parking Slots Interface & Interactive Facility View
+
+### 9.1 Overview and Screen Navigation
+Phase 3.1 introduces the dedicated parking facility exploration screen:
+- **Location**: `frontend/lib/features/parking/parking_slots_screen.dart`
+- **Dashboard Quick Action**: The dashboard's "Parking Slots" quick action tile triggers native Flutter route navigation (`Navigator.of(context).push(MaterialPageRoute(...))`) to `ParkingSlotsScreen`. Standard `AppBar` back navigation returns seamlessly to `DashboardScreen`.
+- **Other Quick Actions**: "Bookings & Reservations" and "Facility Navigation" remain informational placeholders for Phases 3.2 and 3.3.
+
+### 9.2 Physical Facility Layout Visualization
+The facility view faithfully renders the topology defined in `PARKING_FACILITY_DESIGN.md` (Floor 1, 38.0m x 16.0m):
+- **Row A (North, $Y = 13.5\text{ m}$)**: Displays bays `P01` through `P10` ordered West to East.
+- **Central Driving Aisle ($Y = 8.0\text{ m}$)**: 6.0m wide driving lane with a West entrance indicator (`NODE_ENTRANCE`, $X = 2.0\text{ m}$) and 10 waypoint markers (`NODE_W01` through `NODE_W10`, $X = 6.0\text{ m} \dots 33.0\text{ m}$) aligned with each bay column.
+- **Row B (South, $Y = 2.5\text{ m}$)**: Displays bays `P11` through `P20` ordered West to East.
+- **Responsiveness**: Wrapped in a horizontal scroll view with smooth scrolling, ensuring high readability and 0px overflow on constrained mobile viewports.
+
+### 9.3 CustomHashMap Service Integration
+- **Direct $O(1)$ Keyed Lookup**: The UI retrieves individual slots via `controller.slotService.getSlot(slotCode)`, directly executing separate-chaining key lookup against the underlying `CustomHashMap`.
+- **Zero Redundancy**: The presentation tier avoids local registries, duplicate collections, or duplicate business logic.
+- **Reactivity**: Widgets subscribe to `SmartParkController` via `SmartParkScope`. Calling mutations like `controller.updateSlotStatus()` triggers subtree rebuilds with updated live metrics and bay states.
+
+### 9.4 Search and Status Filtering Architecture
+- **Filtering Logic**: Evaluates `slot.slotCode.contains(query.trim().toUpperCase())` combined with `selectedStatus == null || slot.status == selectedStatus`.
+- **In-Place Highlighting**: Non-matching bays remain in the physical diagram but are dimmed (opacity 0.25, tap disabled), preserving physical orientation while emphasizing matching bays.
+- **Empty State**: When 0 bays match across both rows, a dedicated empty state widget appears with a one-tap "Reset All Filters" action.
+- **Non-Mutating**: Filtering strictly selects keys from the active view state; underlying service and model instances remain immutable during filtering.
+
+### 9.5 Slot Inspection Details Modal
+- **Interaction**: Tapping an active bay opens `ParkingSlotDetailsSheet` via modal bottom sheet.
+- **Authoritative Data**: Displays slot code, status indicator, operational active state (`isActive`), coordinates ($X, Y\text{ m}$), navigation node ID (`navigationNodeId`), and an immediate availability banner (`isAvailable`).
+- **Phase Boundary**: Booking workflow is intentionally excluded and deferred to Phase 3.2.
+
+
 
 

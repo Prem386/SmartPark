@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../widgets/smartpark_scope.dart';
+import '../parking/parking_slots_screen.dart';
 
 /// Primary dashboard shell for SmartPark.
 ///
@@ -216,9 +217,9 @@ class DashboardScreen extends StatelessWidget {
           title: 'Parking Slots',
           subtitle: 'View all 20 bays across Row A and Row B',
           onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Parking slots browser available in Phase 3.1.'),
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const ParkingSlotsScreen(),
               ),
             );
           },

@@ -71,15 +71,50 @@ void main() {
       expect(find.text('5'), findsOneWidget);
     });
 
-    testWidgets('quick action tiles trigger expected snackbars',
+    testWidgets('parking slots quick action navigates to ParkingSlotsScreen and back',
         (WidgetTester tester) async {
       final controller = SmartParkController();
       await tester.pumpWidget(buildTestableDashboard(controller));
 
       // Tap Parking Slots
       await tester.tap(find.text('Parking Slots'));
+      await tester.pumpAndSettle();
+
+      // Verify ParkingSlotsScreen is displayed
+      expect(find.text('20 standard bays • Two parallel rows • Central driving aisle'), findsOneWidget);
+      expect(find.text('ROW A (NORTH)'), findsOneWidget);
+      expect(find.text('ROW B (SOUTH)'), findsOneWidget);
+
+      // Tap back button
+      await tester.tap(find.byType(BackButton));
+      await tester.pumpAndSettle();
+
+      // Verify returned to Dashboard
+      expect(find.text('SmartPark Dashboard'), findsOneWidget);
+    });
+
+    testWidgets('unimplemented quick action tiles trigger expected snackbars',
+        (WidgetTester tester) async {
+      final controller = SmartParkController();
+      await tester.pumpWidget(buildTestableDashboard(controller));
+
+      // Scroll to and tap Bookings & Reservations
+      await tester.ensureVisible(find.text('Bookings & Reservations'));
+      await tester.tap(find.text('Bookings & Reservations'));
       await tester.pump();
-      expect(find.text('Parking slots browser available in Phase 3.1.'), findsOneWidget);
+      expect(find.text('Booking management available in Phase 3.2.'), findsOneWidget);
+
+      // Dismiss current SnackBar before next interaction
+      tester.binding.scheduleFrame();
+      ScaffoldMessenger.of(tester.element(find.text('Bookings & Reservations')))
+          .hideCurrentSnackBar();
+      await tester.pump();
+
+      // Scroll to and tap Facility Navigation
+      await tester.ensureVisible(find.text('Facility Navigation'));
+      await tester.tap(find.text('Facility Navigation'));
+      await tester.pump();
+      expect(find.text('Turn-by-turn navigation available in Phase 3.3.'), findsOneWidget);
     });
 
     testWidgets('app bar reset action restores default counts',
