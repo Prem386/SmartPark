@@ -351,3 +351,58 @@ Constructed via `ParkingGraphFactory.createFacilityGraph()` per `docs/PARKING_FA
 | **Interval Tree**| Implemented (Phase 2.5) | Augmented AVL-Balanced Tree (ordered by `start`, augmented with `maxEnd`) | Unbalanced BST / Segment Tree | AVL height-balancing guarantees $O(\log n)$ worst-case insertion, deletion, and overlap queries under chronological bookings. |
 | **Graph + Dijkstra** | Implemented (Phase 2.6) | Adjacency List (CustomHashMap) + Dijkstra with CustomMinHeap | Adjacency Matrix / Bellman-Ford | Adjacency list is optimal for sparse spatial parking maps ($E \ll V^2$); non-negative distances favor Dijkstra over Bellman-Ford. CustomMinHeap integration reuses existing project DSA. |
 
+---
+
+## 7. Application Service Integration Layer (Phase 2.7)
+
+Phase 2.7 integrates the four foundational DSA structures into cohesive, domain-specific application services located in `frontend/lib/services/`:
+
+### 7.1 DSA to Service Mapping
+
+```
++-----------------------------------------------------------------------------------+
+|                           SmartParkDsaService (Facade)                            |
++-------------------+--------------------+--------------------+---------------------+
+|                   |                    |                    |                     |
+|                   v                    v                    v                     v
+|           ParkingSlotService  BookingConflictService  ParkingNavigationService  ParkingRecommendationService
+|                   |                    |                    |                     |
+|                   v                    v                    v                     v
+|             CustomHashMap      CustomIntervalTree     WeightedGraph + Dijkstra  CustomMinHeap + Dijkstra
+|            (Slot Registry)     (Conflict Detection)   (Facility Pathfinding)    (Slot Recommendation Queue)
++-----------------------------------------------------------------------------------+
+```
+
+### 7.2 Service Specifications
+
+1. **`ParkingSlotService`**:
+   - Manages physical parking bay lookup using `CustomHashMap<String, ParkingSlot>`.
+   - Indexed strictly by `ParkingSlot.slotCode` (e.g. `'P01'`), separating physical bay identifiers from model/database record IDs (`ParkingSlot.id`).
+   - Time complexity: $O(1)$ average for `registerSlot`, `updateSlot`, `getSlot`, `removeSlot`.
+
+2. **`BookingConflictService`**:
+   - Manages time-interval conflict detection using `CustomIntervalTree` (AVL-augmented interval tree).
+   - Validates prospective reservations against half-open intervals $[t_{\text{start}}, t_{\text{end}})$.
+   - Evaluates conflicts strictly within the same `slotId`.
+   - **Status Filtering**: Only `BookingStatus.confirmed` and `BookingStatus.active` reserve physical space. `BookingStatus.completed` and `BookingStatus.cancelled` bookings do not conflict.
+   - Time complexity: $O(\log n)$ average conflict check and insertion; $O(k \log n)$ for collecting $k$ overlapping reservations.
+   - *Architectural Note*: Serves as an optimistic client-side validation guard; backend Spring Boot + DB enforces authoritative transactional concurrency control.
+
+3. **`ParkingNavigationService`**:
+   - Manages spatial navigation and turn-by-turn routing using `WeightedGraph`, `Dijkstra`, and `ParkingGraphFactory`.
+   - Computes exact driving/walking distance in meters and reconstructs vertex ID paths from entrance or between arbitrary waypoints.
+   - Preserves mapping between `slotCode` (e.g. `'P04'`) and canonical graph vertex (`'NODE_P04'`).
+   - Time complexity: $O((V + E) \log V)$ for single-source shortest path via lazy duplicate relaxation on `CustomMinHeap`.
+
+4. **`ParkingRecommendationService`**:
+   - Combines `ParkingSlotService`, `ParkingNavigationService`, `ParkingSlotCandidate`, and `CustomMinHeap<ParkingSlotCandidate>`.
+   - Filters active, available slots (`slot.isAvailable`).
+   - Computes shortest route distances from entrance in a single Dijkstra pass ($O((V + E) \log V)$).
+   - Populates `CustomMinHeap` in $O(m)$ using Floyd's bottom-up heapification (where $m \le 20$ eligible bays).
+   - Extracts top-$N$ recommendations in $O(N \log m)$, sorting by shortest route distance with alphabetical tie-breaking on `slotCode`.
+
+5. **`SmartParkDsaService`**:
+   - Lightweight coordination facade providing unified operations (`findSlot`, `findRouteToSlot`, `checkBookingConflict`, `bookSlot`, `getRecommendations`).
+   - Zero framework overhead, zero third-party packages.
+
+

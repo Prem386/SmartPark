@@ -226,3 +226,61 @@ SmartPark/
 3. **No Algorithmic Shortcuts**: Native collections (`dart:collection`, `Map`, `SplayTreeMap`) cannot replace the four required manual DSA implementations.
 4. **Backend Authority**: The frontend performs optimistic checks for responsive user experience, but the Spring Boot backend and its persistent database remain the absolute authority for state mutations.
 
+---
+
+## 7. Application Service Layer & DSA Integration (Phase 2.7)
+
+Phase 2.7 introduces a cohesive application service layer under `frontend/lib/services/` that orchestrates the four manual DSA structures into domain workflows.
+
+### 7.1 Service Responsibilities
+
+| Service | Primary DSA | Key Operations | Architectural Scope |
+| :--- | :--- | :--- | :--- |
+| **`ParkingSlotService`** | `CustomHashMap<String, ParkingSlot>` | `registerSlot`, `updateSlot`, `getSlot`, `removeSlot`, `getAllSlots` | In-memory slot registry indexed strictly by physical `slotCode` ($O(1)$ average). Distinct from backend record `id`. |
+| **`BookingConflictService`** | `CustomIntervalTree` (Augmented AVL) | `addBooking`, `hasConflict`, `getConflictingBookings`, `removeBooking`, `rebuildIndex` | Real-time temporal conflict detection ($O(\log n)$ average) using half-open intervals `[start, end)`. Enforces status filtering. |
+| **`ParkingNavigationService`** | `WeightedGraph` + `Dijkstra` | `getRouteToSlot`, `getRouteToSlotCode`, `findRoute`, `getDistancesToAllSlots` | Spatial graph navigation and turn-by-turn path reconstruction from entrance or arbitrary waypoints. |
+| **`ParkingRecommendationService`** | `CustomMinHeap<ParkingSlotCandidate>` + `Dijkstra` | `getRecommendations(limit)`, `getTopRecommendation` | Multi-DSA coordination: filters available slots, computes route distances, builds min-heap, extracts top-$N$ nearest bays. |
+| **`SmartParkDsaService`** | Unified Facade (All 4 DSAs) | `findSlot`, `findRouteToSlot`, `checkBookingConflict`, `bookSlot`, `getRecommendations` | Lightweight orchestrator coordinating services with zero framework dependencies. |
+
+### 7.2 Service Dependencies
+
+```text
+SmartParkDsaService (Facade)
+├── ParkingSlotService (CustomHashMap)
+├── BookingConflictService (CustomIntervalTree)
+├── ParkingNavigationService (WeightedGraph + Dijkstra)
+└── ParkingRecommendationService (CustomMinHeap + Dijkstra)
+    ├── depends on ParkingSlotService (slot availability)
+    └── depends on ParkingNavigationService (route distance)
+```
+
+### 7.3 Domain Workflows
+
+1. **Parking Recommendation Workflow**:
+   - `ParkingSlotService.getAllSlots()` retrieves current slot states.
+   - Filters eligible bays using model property `slot.isAvailable` (`isActive == true && status == SlotStatus.available`).
+   - `ParkingNavigationService.computeAllDistances(entranceNodeId)` calculates exact driving distances via single Dijkstra pass.
+   - Pairs eligible and reachable slots into `ParkingSlotCandidate` instances.
+   - Inserts candidates into `CustomMinHeap<ParkingSlotCandidate>` via Floyd's $O(n)$ bottom-up heapification.
+   - Extracts top-$N$ candidates via `extractMin()`, breaking equal-distance ties deterministically by `slotCode` alphabetical order.
+
+2. **Booking Conflict Validation Workflow**:
+   - New reservation request `[startTime, endTime)` on `slotId` is checked against `CustomIntervalTree`.
+   - Adheres to half-open interval semantics `[s1, e1)` vs `[s2, e2)`: conflict exists iff $s_1 < e_2 \land s_2 < e_1$.
+   - Adjacent bookings (e.g., 10:00-11:00 and 11:00-12:00) share an endpoint and do NOT conflict.
+   - **Status Filtering**: Only `CONFIRMED` and `ACTIVE` bookings cause conflicts. `COMPLETED` and `CANCELLED` bookings do not block slots.
+   - Distinct slots never conflict even with identical time windows.
+
+3. **Navigation Workflow**:
+   - Accepts a `ParkingSlot` or `slotCode`.
+   - Resolves canonical vertex ID (`slot.navigationNodeId` or `ParkingGraphFactory.slotCodeToNodeId(slotCode)`).
+   - Executes `Dijkstra.findShortestPath` from `NODE_ENTRANCE` (or custom origin).
+   - Returns immutable `NavigationRoute` containing distance in meters, node ID sequence, and reachability flag.
+
+### 7.4 In-Memory Scope and Backend Boundaries
+
+> [!IMPORTANT]
+> **Client-Side Optimistic Validation vs. Authoritative Settlement**:  
+> The client-side `BookingConflictService` and `CustomIntervalTree` provide zero-latency UI feedback, blocking invalid reservation attempts before network transmission. However, client memory is non-authoritative and transient. The authoritative single source of truth is the Spring Boot backend, which executes transactional database validation (`POST /api/bookings`) with locking to prevent double bookings across concurrent users.
+
+
